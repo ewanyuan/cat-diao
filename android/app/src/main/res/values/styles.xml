@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="CatDiaoTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#B95038</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">#FAF7F1</item>
+        <item name="android:statusBarColor">#FAF7F1</item>
+        <item name="android:navigationBarColor">#FAF7F1</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <style name="CatDiaoDialogTheme" parent="android:style/Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:colorAccent">#B95038</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+</resources>

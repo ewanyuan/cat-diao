@@ -1,0 +1,27 @@
+# Build outputs and local tools
+.gradle/
+**/build/
+.idea/
+*.iml
+*.log
+__pycache__/
+*.py[cod]
+.venv/
+runtime/
+
+# Credentials, signing keys, and personal data
+*.keystore
+*.jks
+*.p12
+*.env
+connection.json
+collector.env
+收藏台账/
+手机传来的文件/
+*.sqlite3
+*.xlsx
+*.partial
+
+# Only the reviewed APK is distributed with the skill
+*.apk
+!ewan-android-phone/assets/cat-diao-android-1.8.apk
