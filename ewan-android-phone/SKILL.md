@@ -11,7 +11,7 @@ description: 在 Windows 上通过猫叼操作已配对的安卓手机，或接�
 
 若 `%LOCALAPPDATA%/猫叼小窝/runtime/Scripts/python.exe` 不存在，运行 `scripts/setup.ps1`。它在当前 Windows 用户目录创建独立 Python 环境，安装 Excel 依赖，迁移能找到的旧配对与收藏，设置登录后后台接收；不会把凭据写进技能目录。若电脑没有 Python 3，先为当前用户安装 Python，再重试。普通使用不反复执行 setup。已有「猫叼小窝」电脑程序时共用其数据和接收端口，不启动第二个接收程序。
 
-让用户在手机安装本技能 `assets/` 内的 APK 并打开猫叼。接收程序启动后，也可让手机从电脑的 `http://<局域网IP>:8793/cat-diao.apk` 下载。电脑运行 `scripts/run.ps1 phone pair --wait 60`；手机实际出现连接请求时由用户点「允许」，随后按手机内引导完成系统权限。找不到手机先检查同一 Wi-Fi、解锁状态和猫叼是否已打开，必要时从「设备与电脑」读取地址，在 `phone` 后、命令前加 `--address http://IP:8767`。不要因为一次连接失败就重新配对。
+让用户在手机安装本技能 `assets/` 内的 APK 并打开猫叼。接收程序启动后，也可让手机从电脑的 `http://<局域网IP>:8793/cat-diao.apk` 下载。电脑运行 `scripts/run.ps1 phone pair --wait 60`；手机实际出现连接请求时由用户点「允许」，随后按手机内引导完成系统权限。找不到手机先检查同一 Wi-Fi、解锁状态和猫叼是否已打开，必要时从首页右上角「⋯ → 小窝连接」读取连接地址，在 `phone` 后、命令前加 `--address http://IP:8767`。不要因为一次连接失败就重新配对。
 
 所有运行命令均以 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <本技能绝对路径>/scripts/run.ps1` 开头。`phone` 后接手机命令，`collector` 后接收藏命令。脚本自动使用 `%LOCALAPPDATA%/猫叼小窝/` 中的配对信息、收藏台账、收到的文件和可选知识库配置。不要把这些个人数据、API key 或运行时环境复制进技能包或提交到 GitHub。
 

@@ -509,7 +509,7 @@ def diagnosis(status):
 
 def main():
     parser = argparse.ArgumentParser(description="通过局域网控制已允许的安卓手机；无需无线调试")
-    parser.add_argument("--address", help="猫叼「⋯ → 设备与电脑」显示的连接地址，默认使用上次地址")
+    parser.add_argument("--address", help="猫叼首页右上角「⋯ → 小窝连接」显示的连接地址，默认使用上次地址")
     commands = parser.add_subparsers(dest="command", required=True)
     pairing = commands.add_parser("pair", help="请求手机允许这台电脑")
     pairing.add_argument("--name", default=socket.gethostname())
