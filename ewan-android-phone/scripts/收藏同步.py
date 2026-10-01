@@ -281,7 +281,7 @@ class Receiver(BaseHTTPRequestHandler):
             return self.respond(200, {"service": "catdiao-nest"})
         if self.path not in ("/phone-bridge.apk", "/cat-diao.apk") or not same_lan(self.client_address[0]):
             return self.respond(404, {"error": "未找到"})
-        apk = ROOT / "cat-diao-android-1.8.apk"
+        apk = ROOT / "cat-diao-android-1.10.apk"
         if not apk.is_file():
             return self.respond(404, {"error": "安装包尚未生成"})
         self.send_response(200)

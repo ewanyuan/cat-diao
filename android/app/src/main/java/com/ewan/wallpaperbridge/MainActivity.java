@@ -64,6 +64,9 @@ public class MainActivity extends Activity {
     private TextView summary;
     private TextView summaryDetail;
     private TextView computerStatus;
+    private LinearLayout connectionPanel;
+    private TextView connectionTitle;
+    private TextView connectionSteps;
     private LinearLayout controlPanel;
     private TextView controlStatus;
     private LinearLayout recentPanel;
@@ -202,12 +205,25 @@ public class MainActivity extends Activity {
         hero.addView(capture, captureLayout);
         capture.setOnClickListener(v -> startActivity(new Intent(this, CaptureActivity.class)
                 .setAction(CaptureActivity.ACTION_CLIPBOARD)));
+
+        connectionPanel = panel(PAPER, BORDER);
+        LinearLayout.LayoutParams connectionLayout = new LinearLayout.LayoutParams(-1, -2);
+        connectionLayout.topMargin = dp(14);
+        page.addView(connectionPanel, connectionLayout);
+        connectionTitle = label("", 17, INK, true);
+        connectionPanel.addView(connectionTitle);
+        connectionSteps = label("", 14, MUTED, false);
+        connectionSteps.setPadding(0, dp(8), 0, dp(8));
+        connectionPanel.addView(connectionSteps);
+        connectionPanel.addView(label("查看连接地址与详细步骤  ›", 13, CORAL_DARK, true));
+        connectionPanel.setOnClickListener(v -> showDeviceInfo());
+
         controlPanel = panel(PAPER, BORDER);
         controlPanel.setVisibility(View.GONE);
         LinearLayout.LayoutParams controlLayout = new LinearLayout.LayoutParams(-1, -2);
         controlLayout.topMargin = dp(14);
         page.addView(controlPanel, controlLayout);
-        controlPanel.addView(label("继续连接小窝", 17, INK, true));
+        controlPanel.addView(label("继续设置手机控制", 17, INK, true));
         controlStatus = label("", 13, MUTED, false);
         controlStatus.setPadding(0, dp(6), 0, 0);
         controlPanel.addView(controlStatus);
@@ -229,16 +245,17 @@ public class MainActivity extends Activity {
 
     private void refreshHome() {
         String trusted = BridgeService.trustedName(this);
+        int pending = 0;
         try (CaptureStore store = new CaptureStore(this)) {
             int total = store.totalCount();
-            int pending = store.pendingCount();
+            pending = store.pendingCount();
             recentPanel.setVisibility(total == 0 ? View.GONE : View.VISIBLE);
             if (total == 0) {
                 summary.setText("还没有收藏");
                 summaryDetail.setText("看到喜欢的内容，分享给猫叼就行。");
             } else if (pending > 0) {
                 summary.setText(pending + " 条待叼回小窝");
-                summaryDetail.setText("已叼在嘴里，连上小窝会自动送达。");
+                summaryDetail.setText("收藏还在手机里。按下方步骤连接电脑后会自动补送。");
             } else {
                 summary.setText("都叼回小窝了");
                 summaryDetail.setText("共收藏 " + total + " 条。");
@@ -251,18 +268,27 @@ public class MainActivity extends Activity {
         }
         int ready = setupReadyCount();
         if (trusted.isEmpty()) {
-            computerStatus.setText("小窝还没连接");
-        } else if (ready < 3) {
-            computerStatus.setVisibility(View.GONE);
-        } else if (BridgeService.isRunning()) {
-            computerStatus.setText("小窝：" + trusted);
+            computerStatus.setText("还未与电脑配对");
+        } else if (!BridgeService.isRunning()) {
+            computerStatus.setText("猫叼连接服务未运行，请重新打开应用。");
         } else {
-            computerStatus.setText("猫叼暂时连不上小窝");
+            computerStatus.setText("已配对：" + trusted + "。换了 Wi-Fi？确认电脑端已启动，再让电脑上的 AI 工具（如 Codex）重新连接。");
         }
-        if (trusted.isEmpty() || ready == 3) computerStatus.setVisibility(View.VISIBLE);
+        computerStatus.setVisibility(View.VISIBLE);
+        if (trusted.isEmpty()) {
+            connectionTitle.setText("先连接电脑，收藏才能送达");
+            connectionSteps.setText("1. 电脑和手机连接同一 Wi-Fi。\n2. 电脑首次使用？点这里查看电脑端安装说明。\n3. 安装好后，在电脑上的 AI 工具（如 Codex）里说「连接猫叼」，手机点「允许」。");
+            connectionPanel.setVisibility(View.VISIBLE);
+        } else if (pending > 0) {
+            connectionTitle.setText("让电脑收下待送达的收藏");
+            connectionSteps.setText("登录已安装猫叼电脑端的电脑，确认两台设备在同一 Wi-Fi；在电脑上的 AI 工具（如 Codex）里说「重新连接猫叼」。连上后会自动补送，不用重新配对。");
+            connectionPanel.setVisibility(View.VISIBLE);
+        } else {
+            connectionPanel.setVisibility(View.GONE);
+        }
         controlPanel.setVisibility(trusted.isEmpty() || ready == 3 ? View.GONE : View.VISIBLE);
         if (!trusted.isEmpty() && ready < 3) {
-            controlStatus.setText("还差 " + (3 - ready) + " 步。点这里继续。");
+            controlStatus.setText("屏幕控制等功能还差 " + (3 - ready) + " 步；收藏仍可同步。点这里继续。");
         }
         showPairRequest();
     }
@@ -498,15 +524,22 @@ public class MainActivity extends Activity {
         scroll.addView(body);
         body.addView(label("我的小窝", 17, INK, true));
         TextView computer = label(trusted.isEmpty()
-                ? "还没连接。请先从小窝发起连接。"
-                : setupReadyCount() == 3 ? "已设好：" + trusted
-                : "连接设置未完成：" + trusted, 14, MUTED, false);
+                ? "还没有配对电脑。收藏会先保存在手机里。"
+                : "已配对：" + trusted, 14, MUTED, false);
         computer.setPadding(0, dp(5), 0, 0);
         body.addView(computer);
+        TextView instructions = label(trusted.isEmpty()
+                ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 ewan-android-phone 电脑端，完成首次配置，再连接猫叼」。手机出现请求后点「允许」。"
+                : "换了 Wi-Fi 或电脑地址后：登录电脑，让两台设备连接同一 Wi-Fi；在电脑上的 AI 工具（如 Codex）中说「重新连接猫叼」。电脑会更新连接地址，待送达收藏会自动补送。无需移除现有配对。", 14, INK, false);
+        instructions.setPadding(0, dp(12), 0, dp(8));
+        body.addView(instructions);
         TextView address = label("连接地址：" + findLocalAddress(), 12, MUTED, false);
         address.setTextIsSelectable(true);
         address.setPadding(0, dp(6), 0, 0);
         body.addView(address);
+        TextView addressHelp = label("电脑找不到手机时，把上面的连接地址告诉 AI 工具。", 12, MUTED, false);
+        addressHelp.setPadding(0, dp(6), 0, 0);
+        body.addView(addressHelp);
         String error = getSharedPreferences("bridge", MODE_PRIVATE).getString("capture_sync_error", "");
         if (!error.isEmpty()) {
             TextView diagnostic = label("最近一次同步：" + error, 12, MUTED, false);

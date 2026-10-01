@@ -1,8 +1,8 @@
 # 猫叼 / Cat Diao
 
-安卓手机与 Windows 电脑之间的局域网小工具：收藏链接、传文字和文件，也能让 Codex 操作已配对的手机。无需 USB 线或无线调试。
+安卓手机与 Windows 电脑之间的局域网小工具：收藏链接、传文字和文件，也能让电脑上的 AI 工具（如 Codex）操作已配对的手机。无需 USB 线或无线调试。
 
-A local network companion for Android and Windows. Save links, move text and files, and let Codex control a paired phone. No USB cable or wireless debugging is required.
+A local network companion for Android and Windows. Save links, move text and files, and let AI tools such as Codex control a paired phone. No USB cable or wireless debugging is required.
 
 [中文](#中文) · [English](#english)
 
@@ -20,19 +20,21 @@ A local network companion for Android and Windows. Save links, move text and fil
 
 ### 下载安装
 
-在 Windows 电脑的 Codex 中说：
+以 Codex 为例，在 Windows 电脑中说：
 
 > 请从 `https://github.com/ewanyuan/cat-diao` 安装 `ewan-android-phone` 技能，阅读它的 `SKILL.md`，帮我完成首次配置，并告诉我如何在手机安装猫叼。
 
 Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当前用户的技能目录，并运行一次 `scripts/setup.ps1`。电脑需要 Python 3；首次配置会联网安装 `openpyxl`，并设置接收程序随 Windows 登录启动。个人数据保存在 `%LOCALAPPDATA%/猫叼小窝/`，不会放进技能目录。
 
-手机安装 [猫叼 1.8 APK](ewan-android-phone/assets/cat-diao-android-1.8.apk)，打开后与电脑连接到可互访的同一 Wi-Fi。让 Codex 发起配对；手机出现请求时点“允许”，再按应用引导完成系统设置。屏幕控制、悬浮窗和修改亮度需要本人在安卓系统设置中开启。无需反复输入配对码。
+手机安装 [猫叼 1.10 APK](ewan-android-phone/assets/cat-diao-android-1.10.apk)，打开后与电脑连接到可互访的同一 Wi-Fi。先按上面的步骤安装并配置电脑端，再让电脑上的 AI 工具（如 Codex）发起配对；手机出现请求时点“允许”。屏幕控制、悬浮窗和修改亮度可按应用引导另行开启，收藏同步本身不需要这些权限。无需反复输入配对码。
+
+**换了 Wi-Fi 后：**登录电脑，让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说“重新连接猫叼”。电脑会找到手机并更新手机保存的小窝地址，待送达收藏随后自动补送。通常不需要重新配对；找不到手机时，从猫叼首页右上角“⋯ → 小窝连接”复制连接地址，告诉 AI 工具。
 
 ### 可以做什么
 
-- 在小红书、公众号等应用中分享链接到猫叼；离线时先保存在手机，连上电脑后送达。
+- 在小红书、公众号等应用中分享链接到猫叼；离线时先保存在手机，电脑重新连接后补送。
 - 把手机上选定的文件送到电脑，或把复制的文字送到电脑剪贴板。
-- 在 Codex 中查看手机状态、打开应用、发送文件或文字、设置壁纸；手机允许屏幕控制后还能查看和点按屏幕。
+- 在电脑上的 AI 工具（如 Codex）中查看手机状态、打开应用、发送文件或文字、设置壁纸；手机允许屏幕控制后还能查看和点按屏幕。
 - 电脑端可选接入 WeKnora。它不是手机收件的前提，需要自行配置服务地址和专用 API key。
 
 收到的链接写入 `%LOCALAPPDATA%/猫叼小窝/收藏台账/` 下按月份分开的 Excel 台账和本地数据库；文件放在 `%LOCALAPPDATA%/猫叼小窝/手机传来的文件/`。手机显示“已到小窝”表示电脑确认收件，不表示网页全文已抓取或 AI 已处理。
@@ -40,9 +42,9 @@ Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当�
 ### 应用场景
 
 1. **让 AI 做手机 App 的画面调试。** Codex 等工具在电脑上改代码、构建 APK，再通过猫叼把安装包送到手机。完成安卓的安装确认后，AI 可以打开应用、截屏、点按和滑动，根据实际画面继续修改。这个循环不需要数据线，也不依赖容易断开的无线调试。当前猫叼负责传包和画面交互；系统安装确认仍需用户操作，也不提供 logcat 或断点调试。
-2. **把随手收藏变成可分析的资料。** 在小红书、公众号或网页里将链接、文字分享给猫叼；暂时连不上电脑时先留在手机，回到同一局域网后送到电脑台账。之后可让 Codex 按主题整理、分析和记录反馈；配置 WeKnora 后还可继续入库。猫叼接收的是你主动分享或复制给它的内容，不会读取其他应用的整个收藏夹；AI 分析也需要另行发起。
+2. **把随手收藏变成可分析的资料。** 在小红书、公众号或网页里将链接、文字分享给猫叼；暂时连不上电脑时先留在手机，电脑重新连接后补送到台账。之后可让 AI 工具按主题整理、分析和记录反馈；配置 WeKnora 后还可继续入库。猫叼接收的是你主动分享或复制给它的内容，不会读取其他应用的整个收藏夹；AI 分析也需要另行发起。
 3. **跨设备接力。** 将电脑上的提示词、草稿或文件送到手机；在手机上选好文件送回电脑，或把复制的文字放进电脑剪贴板，不用在聊天窗口里反复转发。
-4. **让 AI 帮忙看手机问题。** 在手机解锁并允许屏幕控制后，Codex 可以查看状态和屏幕、打开应用、调整音量或亮度、设置壁纸，并根据截图引导下一步。
+4. **让 AI 帮忙看手机问题。** 在手机解锁并允许屏幕控制后，电脑上的 AI 工具可以查看状态和屏幕、打开应用、调整音量或亮度、设置壁纸，并根据截图引导下一步。
 
 ### 使用边界
 
@@ -54,19 +56,21 @@ Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当�
 
 ### Install
 
-Ask Codex on a Windows PC:
+For example, ask Codex on a Windows PC:
 
 > Install the `ewan-android-phone` skill from `https://github.com/ewanyuan/cat-diao`. Read its `SKILL.md`, complete the first-time setup, and show me how to install the Android app.
 
 Codex should place [`ewan-android-phone/`](ewan-android-phone/) in the current user's skills directory and run `scripts/setup.ps1` once. The PC needs Python 3. Initial setup downloads `openpyxl` and starts the receiver when you sign in to Windows. Pairing details and received content stay in `%LOCALAPPDATA%/猫叼小窝/`, outside the skill folder.
 
-Install the [Cat Diao 1.8 APK](ewan-android-phone/assets/cat-diao-android-1.8.apk) on the phone. Connect the phone and PC to the same Wi-Fi where devices can reach each other. Ask Codex to pair, approve the request on the phone, then follow the app's system-permission guide. Android requires you to enable screen control, the floating window, and brightness control yourself. Pairing does not require a recurring code.
+Install the [Cat Diao 1.10 APK](ewan-android-phone/assets/cat-diao-android-1.10.apk) on the phone. Connect the phone and PC to the same Wi-Fi where devices can reach each other. Set up the PC component as described above, then ask your AI tool, such as Codex, to pair and approve the request on the phone. Screen control, the floating window, and brightness control can be enabled separately through the app's guide; saving links does not require those permissions. Pairing does not require a recurring code.
+
+**After changing Wi-Fi:** sign in to Windows, connect both devices to the same Wi-Fi, and ask your AI tool on the PC, such as Codex, to “reconnect Cat Diao.” The PC finds the phone and updates the PC address saved on it; pending saves are then sent automatically. You normally do not need to pair again. If discovery fails, copy the address from “⋯ → 小窝连接” in the phone app and give it to the AI tool.
 
 ### What it does
 
-- Share article links from apps such as Xiaohongshu or WeChat to Cat Diao. Links wait on the phone while offline and transfer when the PC is reachable.
+- Share article links from apps such as Xiaohongshu or WeChat to Cat Diao. Links wait on the phone while offline and transfer after the PC reconnects.
 - Send a selected phone file to the PC, or send copied phone text to the PC clipboard.
-- Ask Codex for phone status, open an app, send text or files, or set a wallpaper. With screen-control permission, Codex can also view and tap the screen.
+- Ask an AI tool on the PC for phone status, to open an app, send text or files, or set a wallpaper. With screen-control permission, it can also view and tap the screen.
 - Optionally sync received links to WeKnora on the PC. Local receiving works without WeKnora; you must configure your own server URL and dedicated API key to enable it.
 
 Received links are recorded in monthly Excel files and a local database under `%LOCALAPPDATA%/猫叼小窝/收藏台账/`. Received files are under `%LOCALAPPDATA%/猫叼小窝/手机传来的文件/`. “已到小窝” means the PC acknowledged receipt; it does not mean the full article was extracted or reviewed by AI.
@@ -74,9 +78,9 @@ Received links are recorded in monthly Excel files and a local database under `%
 ### Use cases
 
 1. **Visual testing for AI-built Android apps.** Codex or another AI tool can change code and build an APK on the PC, then send the package to the phone through Cat Diao. After you approve installation in Android, the AI can open the app, capture screenshots, tap and swipe, and use the visible results for another iteration. This loop needs neither a cable nor a wireless debugging connection. Cat Diao transfers the APK and supports screen interaction; it cannot silently approve installation or provide logcat and breakpoint debugging.
-2. **Turn saved links into working knowledge.** Share or copy links and text from Xiaohongshu, WeChat articles, or web pages into Cat Diao. Items wait on the phone while the PC is unreachable and reach its ledger on the same local network. You can then ask Codex to group, analyze, and record feedback; WeKnora indexing is optional. Cat Diao receives items you explicitly share or copy to it. It does not read every other app's saved-items list, and AI analysis must be requested separately.
+2. **Turn saved links into working knowledge.** Share or copy links and text from Xiaohongshu, WeChat articles, or web pages into Cat Diao. Items wait on the phone while the PC is unreachable and reach its ledger after the PC reconnects. You can then ask an AI tool to group, analyze, and record feedback; WeKnora indexing is optional. Cat Diao receives items you explicitly share or copy to it. It does not read every other app's saved-items list, and AI analysis must be requested separately.
 3. **Move work between devices.** Send prompts, drafts, or files from the PC to the phone. Select a phone file to send back, or place copied phone text on the PC clipboard, without forwarding everything through a chat app.
-4. **Get help with a phone issue.** With the phone unlocked and screen control enabled, Codex can inspect status and screenshots, open apps, adjust volume or brightness, set a wallpaper, and suggest the next step from what it sees.
+4. **Get help with a phone issue.** With the phone unlocked and screen control enabled, an AI tool on the PC can inspect status and screenshots, open apps, adjust volume or brightness, set a wallpaper, and suggest the next step from what it sees.
 
 ### Limits and source
 

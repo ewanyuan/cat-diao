@@ -123,8 +123,9 @@ public class OnboardingActivity extends Activity {
             note(content, "显示「已叼在嘴里」，就是还没送到小窝。");
         } else {
             row(panel, "发到小窝", "把复制的文字发到小窝剪贴板，或选文件发送。", true);
-            row(panel, "操作手机", "在 Codex 里查看手机、操作屏幕、换壁纸，也能把文字和文件发回手机。", false);
-            note(content, "第一次连接，在小窝的 Codex 里说「连接猫叼」，然后在手机上点「允许」。");
+            row(panel, "操作手机", "在电脑上的 AI 工具（如 Codex）里查看手机、操作屏幕、换壁纸，也能把文字和文件发回手机。", false);
+            note(content, "第一次连接，先按「小窝连接」里的说明安装电脑端；再让电脑上的 AI 工具（如 Codex）连接猫叼，手机点「允许」。");
+            note(content, "换了 Wi-Fi 后，在电脑上的 AI 工具里说「重新连接猫叼」。待送达的收藏会自动补送，不用重新配对。");
         }
 
         LinearLayout dots = new LinearLayout(this);

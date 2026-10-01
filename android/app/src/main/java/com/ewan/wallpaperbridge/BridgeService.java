@@ -418,7 +418,7 @@ public class BridgeService extends Service {
 
         if (method.equals("GET") && path.equals("/hello")) {
             JSONObject result = new JSONObject().put("name", "猫叼")
-                    .put("version", "1.8").put("paired", !preferences.getString("computer_token", "").isEmpty())
+                    .put("version", "1.10").put("paired", !preferences.getString("computer_token", "").isEmpty())
                     .put("setup_complete", setupComplete())
                     .put("model", Build.MODEL);
             json(output, 200, result); return;

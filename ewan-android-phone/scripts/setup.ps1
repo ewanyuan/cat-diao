@@ -73,4 +73,4 @@ if (-not (Test-Path -LiteralPath $companionExe -PathType Leaf)) {
 
 & (Join-Path $PSScriptRoot 'start_receiver.ps1')
 Write-Output ('Cat Diao data: ' + $dataHome)
-Write-Output ('Android APK: ' + (Join-Path (Split-Path -Parent $PSScriptRoot) 'assets/cat-diao-android-1.8.apk'))
+Write-Output ('Android APK: ' + (Join-Path (Split-Path -Parent $PSScriptRoot) 'assets/cat-diao-android-1.10.apk'))
