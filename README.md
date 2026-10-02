@@ -26,9 +26,9 @@ A local network companion for Android and Windows. Save links, move text and fil
 
 Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当前用户的技能目录，并运行一次 `scripts/setup.ps1`。电脑需要 Python 3；首次配置会联网安装 `openpyxl`，并设置接收程序随 Windows 登录启动。个人数据保存在 `%LOCALAPPDATA%/猫叼小窝/`，不会放进技能目录。
 
-手机安装 [猫叼 1.10 APK](ewan-android-phone/assets/cat-diao-android-1.10.apk)，打开后与电脑连接到可互访的同一 Wi-Fi。先按上面的步骤安装并配置电脑端，再让电脑上的 AI 工具（如 Codex）发起配对；手机出现请求时点“允许”。屏幕控制、悬浮窗和修改亮度可按应用引导另行开启，收藏同步本身不需要这些权限。无需反复输入配对码。
+手机安装 [猫叼 1.11 APK](ewan-android-phone/assets/cat-diao-android-1.11.apk)，打开后与电脑连接到可互访的同一 Wi-Fi。先按上面的步骤安装并配置电脑端，再让电脑上的 AI 工具（如 Codex）发起配对；手机出现请求时点“允许”。屏幕控制、悬浮窗和修改亮度可按应用引导另行开启，收藏同步本身不需要这些权限。无需反复输入配对码。
 
-**换了 Wi-Fi 后：**登录电脑，让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说“重新连接猫叼”。电脑会找到手机并更新手机保存的小窝地址，待送达收藏随后自动补送。通常不需要重新配对；找不到手机时，从猫叼首页右上角“⋯ → 小窝连接”复制连接地址，告诉 AI 工具。
+**换了 Wi-Fi 后：**只要电脑端「猫叼接收」和手机猫叼仍在运行，电脑会在后台每 10 秒查找已配对手机；两台设备恢复到可互访的同一 Wi-Fi 后，会自动更新连接地址并补送收藏。手机首页会显示「已连接」「正在查找」或「暂未连通」。若一直离线，再让电脑上的 AI 工具（如 Codex）说“重新连接猫叼”；必要时从手机首页右上角“⋯ → 小窝连接”复制连接地址。
 
 ### 可以做什么
 
@@ -62,9 +62,9 @@ For example, ask Codex on a Windows PC:
 
 Codex should place [`ewan-android-phone/`](ewan-android-phone/) in the current user's skills directory and run `scripts/setup.ps1` once. The PC needs Python 3. Initial setup downloads `openpyxl` and starts the receiver when you sign in to Windows. Pairing details and received content stay in `%LOCALAPPDATA%/猫叼小窝/`, outside the skill folder.
 
-Install the [Cat Diao 1.10 APK](ewan-android-phone/assets/cat-diao-android-1.10.apk) on the phone. Connect the phone and PC to the same Wi-Fi where devices can reach each other. Set up the PC component as described above, then ask your AI tool, such as Codex, to pair and approve the request on the phone. Screen control, the floating window, and brightness control can be enabled separately through the app's guide; saving links does not require those permissions. Pairing does not require a recurring code.
+Install the [Cat Diao 1.11 APK](ewan-android-phone/assets/cat-diao-android-1.11.apk) on the phone. Connect the phone and PC to the same Wi-Fi where devices can reach each other. Set up the PC component as described above, then ask your AI tool, such as Codex, to pair and approve the request on the phone. Screen control, the floating window, and brightness control can be enabled separately through the app's guide; saving links does not require those permissions. Pairing does not require a recurring code.
 
-**After changing Wi-Fi:** sign in to Windows, connect both devices to the same Wi-Fi, and ask your AI tool on the PC, such as Codex, to “reconnect Cat Diao.” The PC finds the phone and updates the PC address saved on it; pending saves are then sent automatically. You normally do not need to pair again. If discovery fails, copy the address from “⋯ → 小窝连接” in the phone app and give it to the AI tool.
+**After changing Wi-Fi:** while the PC receiver and phone service are running, the PC searches for the paired phone every 10 seconds. When both devices return to a Wi-Fi network where they can reach each other, the address is refreshed and pending saves are sent automatically. The phone shows whether the PC is connected, being discovered, or temporarily offline. If it remains offline, ask your AI tool to “reconnect Cat Diao”; if needed, copy the address from “⋯ → 小窝连接” in the phone app and give it to the AI tool.
 
 ### What it does
 

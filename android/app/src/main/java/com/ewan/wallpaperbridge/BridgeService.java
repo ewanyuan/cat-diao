@@ -60,6 +60,7 @@ import java.util.UUID;
 
 public class BridgeService extends Service {
     public static final int PORT = 8767;
+    public static final long COMPUTER_ONLINE_WINDOW_MS = 45000;
     private static final String CHANNEL = "phone_bridge";
     private static final int MAX_WALLPAPER = 20 * 1024 * 1024;
     private static final long STORAGE_RESERVE = 64L * 1024 * 1024;
@@ -142,7 +143,8 @@ public class BridgeService extends Service {
             context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
                     .putString("computer_token", request.token)
                     .putString("computer_name", request.name)
-                    .putString("computer_address", request.address).apply();
+                    .putString("computer_address", request.address)
+                    .remove("computer_last_seen_at").apply();
         }
         request.outcome = allow ? "approved" : "rejected";
         if (active != null) active.showNotification(allow ? "正在连接小窝" : "已拒绝小窝连接");
@@ -150,7 +152,8 @@ public class BridgeService extends Service {
 
     public static void revoke(Context context) {
         context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .remove("computer_token").remove("computer_name").remove("computer_address").apply();
+                .remove("computer_token").remove("computer_name").remove("computer_address")
+                .remove("computer_last_seen_at").apply();
         if (active != null) active.showNotification("小窝未连接；收藏会先保存在手机");
     }
 
@@ -418,7 +421,7 @@ public class BridgeService extends Service {
 
         if (method.equals("GET") && path.equals("/hello")) {
             JSONObject result = new JSONObject().put("name", "猫叼")
-                    .put("version", "1.10").put("paired", !preferences.getString("computer_token", "").isEmpty())
+                    .put("version", "1.11").put("paired", !preferences.getString("computer_token", "").isEmpty())
                     .put("setup_complete", setupComplete())
                     .put("model", Build.MODEL);
             json(output, 200, result); return;
@@ -454,10 +457,15 @@ public class BridgeService extends Service {
         if (expected.isEmpty() || !constantTimeEquals(expected, supplied)) {
             json(output, 401, new JSONObject().put("error", "请先在猫叼连接小窝")); return;
         }
+        preferences.edit().putLong("computer_last_seen_at", System.currentTimeMillis()).apply();
         String currentComputerAddress = client.getInetAddress().getHostAddress();
         if (!currentComputerAddress.equals(preferences.getString("computer_address", ""))) {
             preferences.edit().putString("computer_address", currentComputerAddress).apply();
             requestCaptureSync();
+        }
+        if (method.equals("GET") && path.equals("/heartbeat")) {
+            requestCaptureSync();
+            json(output, 200, new JSONObject().put("connected", true)); return;
         }
         if (method.equals("GET") && path.equals("/status")) { json(output, 200, status()); return; }
         if (!setupComplete()) {
@@ -620,6 +628,7 @@ public class BridgeService extends Service {
                 .put("capture_sync_error", preferences.getString("capture_sync_error", ""))
                 .put("capture_sync_last_attempt_at", preferences.getLong("capture_sync_last_attempt_at", 0))
                 .put("capture_sync_last_success_at", preferences.getLong("capture_sync_last_success_at", 0))
+                .put("computer_last_seen_at", preferences.getLong("computer_last_seen_at", 0))
                 .put("computer_address", preferences.getString("computer_address", ""))
                 .put("shared_file_selected", !preferences.getString("shared_uri", "").isEmpty());
     }

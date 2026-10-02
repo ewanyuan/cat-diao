@@ -185,11 +185,16 @@ def discover(token=None):
             continue
     for candidate in dict.fromkeys(candidates):
         try:
-            hello = request(candidate, "GET", "/hello")
+            hello = request(candidate, "GET", "/hello", timeout=2)
             if hello.get("name") not in ("手机直达", "猫叼"):
                 continue
             if token:
-                request(candidate, "GET", "/status", token)
+                try:
+                    request(candidate, "GET", "/heartbeat", token, timeout=3)
+                except RuntimeError:
+                    # Older app versions do not expose /heartbeat; /status still
+                    # verifies the paired token and keeps discovery compatible.
+                    request(candidate, "GET", "/status", token, timeout=3)
             return candidate
         except (OSError, RuntimeError, ValueError):
             continue
@@ -216,8 +221,8 @@ def connection(address, timeout=30):
                                       source_address=(source, 0) if source else None)
 
 
-def request(address, method, path, token=None, body=None, headers=None, stream=False):
-    conn = connection(address)
+def request(address, method, path, token=None, body=None, headers=None, stream=False, timeout=30):
+    conn = connection(address, timeout=timeout)
     fields = dict(headers or {})
     if token:
         fields["X-Phone-Token"] = token

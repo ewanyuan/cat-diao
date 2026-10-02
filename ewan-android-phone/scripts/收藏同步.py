@@ -29,6 +29,7 @@ PAIRING = nest_paths.pairing_file()
 ENV_FILE = nest_paths.env_file()
 PORT = 8793
 KB_NAME = "手机随手收藏"
+PHONE_CONNECTION_INTERVAL_S = 10
 HEADERS = ["收藏ID", "收藏时间", "来源", "分享文字", "链接", "入库状态", "全文状态", "WeKnora资料ID", "WeKnora网页ID", "AI处理状态", "AI反馈", "反馈时间", "备注"]
 LOCK = threading.RLock()
 
@@ -260,6 +261,34 @@ def refresh_ledgers():
                 pass
 
 
+def maintain_phone_connection():
+    saved = phone_bridge.config_read()
+    token = saved.get("token", "")
+    if not token:
+        return
+    address = saved.get("address", "")
+    if address and phone_bridge.is_reachable(address):
+        try:
+            phone_bridge.request(address, "GET", "/heartbeat", token, timeout=3)
+            return
+        except RuntimeError:
+            try:
+                # Keep older paired apps reachable until their update is installed.
+                phone_bridge.request(address, "GET", "/status", token, timeout=3)
+                return
+            except Exception:
+                pass
+        except Exception:
+            pass
+    found = phone_bridge.discover(token)
+    if not found:
+        return
+    latest = phone_bridge.config_read()
+    if latest.get("token") == token and latest.get("address") != found:
+        latest["address"] = found
+        phone_bridge.config_save(latest)
+
+
 def same_lan(remote):
     try:
         ip = ipaddress.ip_address(remote)
@@ -281,7 +310,7 @@ class Receiver(BaseHTTPRequestHandler):
             return self.respond(200, {"service": "catdiao-nest"})
         if self.path not in ("/phone-bridge.apk", "/cat-diao.apk") or not same_lan(self.client_address[0]):
             return self.respond(404, {"error": "未找到"})
-        apk = ROOT / "cat-diao-android-1.10.apk"
+        apk = ROOT / "cat-diao-android-1.11.apk"
         if not apk.is_file():
             return self.respond(404, {"error": "安装包尚未生成"})
         self.send_response(200)
@@ -382,7 +411,17 @@ def main():
             except Exception as error:
                 print(f"知识库暂时无法同步：{str(error)[:160]}", flush=True)
             time.sleep(45)
+    def phone_connection_worker():
+        while True:
+            try:
+                maintain_phone_connection()
+            except Exception:
+                pass
+            time.sleep(PHONE_CONNECTION_INTERVAL_S)
+
     threading.Thread(target=worker, daemon=True).start()
+    threading.Thread(target=phone_connection_worker, daemon=True,
+                     name="catdiao-phone-connection").start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Receiver)
     print(f"手机收藏接收已开启，端口 {PORT}", flush=True)
     server.serve_forever()

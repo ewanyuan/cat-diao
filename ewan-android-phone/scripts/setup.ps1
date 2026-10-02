@@ -71,6 +71,6 @@ if (-not (Test-Path -LiteralPath $companionExe -PathType Leaf)) {
     $shortcut.Save()
 }
 
-& (Join-Path $PSScriptRoot 'start_receiver.ps1')
+& (Join-Path $PSScriptRoot 'start_receiver.ps1') -Restart
 Write-Output ('Cat Diao data: ' + $dataHome)
-Write-Output ('Android APK: ' + (Join-Path (Split-Path -Parent $PSScriptRoot) 'assets/cat-diao-android-1.10.apk'))
+Write-Output ('Android APK: ' + (Join-Path (Split-Path -Parent $PSScriptRoot) 'assets/cat-diao-android-1.11.apk'))

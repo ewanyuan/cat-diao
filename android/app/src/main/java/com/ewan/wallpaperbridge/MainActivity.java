@@ -267,21 +267,21 @@ public class MainActivity extends Activity {
             recentPanel.setVisibility(View.GONE);
         }
         int ready = setupReadyCount();
-        if (trusted.isEmpty()) {
-            computerStatus.setText("还未与电脑配对");
-        } else if (!BridgeService.isRunning()) {
-            computerStatus.setText("猫叼连接服务未运行，请重新打开应用。");
-        } else {
-            computerStatus.setText("已配对：" + trusted + "。换了 Wi-Fi？确认电脑端已启动，再让电脑上的 AI 工具（如 Codex）重新连接。");
-        }
+        boolean online = computerOnline();
+        computerStatus.setText(computerConnectionText(trusted));
+        computerStatus.setTextColor(trusted.isEmpty() ? MUTED : online ? MINT : CORAL_DARK);
         computerStatus.setVisibility(View.VISIBLE);
         if (trusted.isEmpty()) {
             connectionTitle.setText("先连接电脑，收藏才能送达");
             connectionSteps.setText("1. 电脑和手机连接同一 Wi-Fi。\n2. 电脑首次使用？点这里查看电脑端安装说明。\n3. 安装好后，在电脑上的 AI 工具（如 Codex）里说「连接猫叼」，手机点「允许」。");
             connectionPanel.setVisibility(View.VISIBLE);
+        } else if (!online) {
+            connectionTitle.setText(pending > 0 ? "等待电脑连接，收藏会自动补送" : "正在查找已配对的电脑");
+            connectionSteps.setText("电脑端「猫叼接收」需要保持运行，并确保两台设备连在可互访的同一 Wi-Fi。猫叼会自动查找并重连；恢复后待送达收藏会自动补送，通常无需重新配对。若持续离线，点右上角「⋯ → 小窝连接」查看连接地址和排查步骤。");
+            connectionPanel.setVisibility(View.VISIBLE);
         } else if (pending > 0) {
-            connectionTitle.setText("让电脑收下待送达的收藏");
-            connectionSteps.setText("登录已安装猫叼电脑端的电脑，确认两台设备在同一 Wi-Fi；在电脑上的 AI 工具（如 Codex）里说「重新连接猫叼」。连上后会自动补送，不用重新配对。");
+            connectionTitle.setText("电脑已连接，收藏正在补送");
+            connectionSteps.setText("猫叼正把手机里待送达的收藏自动补送到电脑。");
             connectionPanel.setVisibility(View.VISIBLE);
         } else {
             connectionPanel.setVisibility(View.GONE);
@@ -291,6 +291,24 @@ public class MainActivity extends Activity {
             controlStatus.setText("屏幕控制等功能还差 " + (3 - ready) + " 步；收藏仍可同步。点这里继续。");
         }
         showPairRequest();
+    }
+
+    private boolean computerOnline() {
+        if (!BridgeService.isRunning()) return false;
+        long lastSeen = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("computer_last_seen_at", 0);
+        long age = System.currentTimeMillis() - lastSeen;
+        return lastSeen > 0 && age >= 0 && age <= BridgeService.COMPUTER_ONLINE_WINDOW_MS;
+    }
+
+    private String computerConnectionText(String trusted) {
+        if (trusted.isEmpty()) return "还未与电脑配对";
+        if (!BridgeService.isRunning()) return "手机连接服务已停止，请重新打开猫叼。";
+        long lastSeen = getSharedPreferences("bridge", MODE_PRIVATE)
+                .getLong("computer_last_seen_at", 0);
+        if (computerOnline()) return "已连接电脑：" + trusted;
+        if (lastSeen == 0) return "已配对：" + trusted + " · 正在局域网查找电脑";
+        return "已配对：" + trusted + " · 暂未连通，正在自动重连";
     }
 
     private void renderRecent(JSONArray items) {
@@ -525,12 +543,12 @@ public class MainActivity extends Activity {
         body.addView(label("我的小窝", 17, INK, true));
         TextView computer = label(trusted.isEmpty()
                 ? "还没有配对电脑。收藏会先保存在手机里。"
-                : "已配对：" + trusted, 14, MUTED, false);
+                : computerConnectionText(trusted), 14, MUTED, false);
         computer.setPadding(0, dp(5), 0, 0);
         body.addView(computer);
         TextView instructions = label(trusted.isEmpty()
                 ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 ewan-android-phone 电脑端，完成首次配置，再连接猫叼」。手机出现请求后点「允许」。"
-                : "换了 Wi-Fi 或电脑地址后：登录电脑，让两台设备连接同一 Wi-Fi；在电脑上的 AI 工具（如 Codex）中说「重新连接猫叼」。电脑会更新连接地址，待送达收藏会自动补送。无需移除现有配对。", 14, INK, false);
+                : "电脑端「猫叼接收」会在后台每 10 秒自动查找手机。两台设备恢复到同一可互访的 Wi-Fi 后，会自动连接并补送待送达收藏，无需重新配对。若持续离线，请确认电脑端接收程序正在运行；仍无法连接时，可让电脑上的 AI 工具（如 Codex）说「重新连接猫叼」，并提供上面的连接地址。", 14, INK, false);
         instructions.setPadding(0, dp(12), 0, dp(8));
         body.addView(instructions);
         TextView address = label("连接地址：" + findLocalAddress(), 12, MUTED, false);

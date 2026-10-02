@@ -8,8 +8,8 @@ android {
         applicationId = "com.ewan.wallpaperbridge"
         minSdk = 29
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.10"
+        versionCode = 21
+        versionName = "1.11"
     }
 
     buildTypes {
