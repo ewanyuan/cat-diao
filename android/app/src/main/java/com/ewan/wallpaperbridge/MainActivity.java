@@ -58,15 +58,18 @@ public class MainActivity extends Activity {
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             refreshHome();
-            mainHandler.postDelayed(this, 2000);
+            mainHandler.postDelayed(this, 1000);
         }
     };
+    private final Runnable connectionRefresh = this::refreshHome;
+    private final Runnable connectionListener = () -> mainHandler.post(connectionRefresh);
     private TextView summary;
     private TextView summaryDetail;
     private TextView computerStatus;
     private LinearLayout connectionPanel;
     private TextView connectionTitle;
     private TextView connectionSteps;
+    private Button connectionRetry;
     private LinearLayout controlPanel;
     private TextView controlStatus;
     private LinearLayout recentPanel;
@@ -101,8 +104,10 @@ public class MainActivity extends Activity {
         super.onStart();
         visible = true;
         BridgeService.appActivityStarted();
+        BridgeService.addConnectionListener(connectionListener);
         try {
-            startForegroundService(new Intent(this, BridgeService.class));
+            startForegroundService(new Intent(this, BridgeService.class)
+                    .setAction(BridgeService.ACTION_CHECK_CONNECTION));
         } catch (Exception error) {
             Toast.makeText(this, "猫叼暂时连不上小窝，请重新打开", Toast.LENGTH_LONG).show();
         }
@@ -132,7 +137,9 @@ public class MainActivity extends Activity {
     @Override protected void onStop() {
         visible = false;
         BridgeService.appActivityStopped();
+        BridgeService.removeConnectionListener(connectionListener);
         mainHandler.removeCallbacks(refresh);
+        mainHandler.removeCallbacks(connectionRefresh);
         if (pairDialog != null) pairDialog.dismiss();
         pairDialog = null;
         if (setupDialog != null) setupDialog.dismiss();
@@ -215,6 +222,16 @@ public class MainActivity extends Activity {
         connectionSteps = label("", 14, MUTED, false);
         connectionSteps.setPadding(0, dp(8), 0, dp(8));
         connectionPanel.addView(connectionSteps);
+        connectionRetry = button("重新检查（最多 10 秒）", false);
+        connectionPanel.addView(connectionRetry);
+        connectionRetry.setOnClickListener(v -> {
+            try {
+                startForegroundService(new Intent(this, BridgeService.class)
+                        .setAction(BridgeService.ACTION_CHECK_CONNECTION));
+            } catch (Exception error) {
+                Toast.makeText(this, "连接检查未能启动，请重新打开猫叼。", Toast.LENGTH_LONG).show();
+            }
+        });
         connectionPanel.addView(label("查看连接地址与详细步骤  ›", 13, CORAL_DARK, true));
         connectionPanel.setOnClickListener(v -> showDeviceInfo());
 
@@ -268,6 +285,11 @@ public class MainActivity extends Activity {
         }
         int ready = setupReadyCount();
         boolean online = computerOnline();
+        ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
+        boolean checking = check.phase == ComputerConnection.Phase.CHECKING && BridgeService.isRunning();
+        connectionRetry.setVisibility(trusted.isEmpty() || online ? View.GONE : View.VISIBLE);
+        connectionRetry.setEnabled(!checking);
+        connectionRetry.setText(checking ? "正在检查…" : "重新检查（最多 10 秒）");
         computerStatus.setText(computerConnectionText(trusted));
         computerStatus.setTextColor(trusted.isEmpty() ? MUTED : online ? MINT : CORAL_DARK);
         computerStatus.setVisibility(View.VISIBLE);
@@ -276,12 +298,27 @@ public class MainActivity extends Activity {
             connectionSteps.setText("1. 电脑和手机连接同一 Wi-Fi。\n2. 电脑首次使用？点这里查看电脑端安装说明。\n3. 安装好后，在电脑上的 AI 工具（如 Codex）里说「连接猫叼」，手机点「允许」。");
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (!online) {
-            connectionTitle.setText(pending > 0 ? "等待电脑连接，收藏会自动补送" : "正在查找已配对的电脑");
-            connectionSteps.setText("电脑端「猫叼接收」需要保持运行，并确保两台设备连在可互访的同一 Wi-Fi。猫叼会自动查找并重连；恢复后待送达收藏会自动补送，通常无需重新配对。若持续离线，点右上角「⋯ → 小窝连接」查看连接地址和排查步骤。");
+            if (checking) {
+                long seconds = (check.remainingMs() + 999) / 1000;
+                connectionTitle.setText("正在连接电脑 · 剩余 " + seconds + " 秒");
+                connectionSteps.setText("本次正在等待电脑接收程序确认，最多 10 秒。连上后，待送达的收藏会自动补送。");
+            } else {
+                connectionTitle.setText(!BridgeService.isRunning() ? "手机连接服务已停止" :
+                        check.phase == ComputerConnection.Phase.FAILED
+                        ? "本次未连上电脑" : "电脑尚未连接");
+                String detail = check.error.isEmpty() ? "还没有收到电脑接收程序的连接确认。" : check.error;
+                String finished = check.finishedAt == 0 ? "" : "\n检查结束：" +
+                        new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                                .format(new java.util.Date(check.finishedAt)) + "。";
+                connectionSteps.setText(!BridgeService.isRunning() ? "请重新打开猫叼，再检查连接。" :
+                        detail + finished + "\n请确认电脑端「猫叼接收」已开启，两台设备连在可互访的同一 Wi-Fi。后台会每 10 秒再试；连上后收藏会自动补送。");
+            }
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (pending > 0) {
-            connectionTitle.setText("电脑已连接，收藏正在补送");
-            connectionSteps.setText("猫叼正把手机里待送达的收藏自动补送到电脑。");
+            String syncError = getSharedPreferences("bridge", MODE_PRIVATE).getString("capture_sync_error", "");
+            connectionTitle.setText(syncError.isEmpty() ? "电脑已连接，收藏正在补送" : "收藏暂未送达");
+            connectionSteps.setText(syncError.isEmpty() ? "猫叼正把手机里待送达的收藏自动补送到电脑。"
+                    : syncError + "\n收藏仍保存在手机，猫叼会继续尝试送达。");
             connectionPanel.setVisibility(View.VISIBLE);
         } else {
             connectionPanel.setVisibility(View.GONE);
@@ -295,20 +332,21 @@ public class MainActivity extends Activity {
 
     private boolean computerOnline() {
         if (!BridgeService.isRunning()) return false;
-        long lastSeen = getSharedPreferences("bridge", MODE_PRIVATE)
-                .getLong("computer_last_seen_at", 0);
-        long age = System.currentTimeMillis() - lastSeen;
-        return lastSeen > 0 && age >= 0 && age <= BridgeService.COMPUTER_ONLINE_WINDOW_MS;
+        ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
+        long age = System.currentTimeMillis() - check.finishedAt;
+        return check.phase == ComputerConnection.Phase.CONNECTED && age >= 0 &&
+                age <= BridgeService.COMPUTER_ONLINE_WINDOW_MS;
     }
 
     private String computerConnectionText(String trusted) {
         if (trusted.isEmpty()) return "还未与电脑配对";
         if (!BridgeService.isRunning()) return "手机连接服务已停止，请重新打开猫叼。";
-        long lastSeen = getSharedPreferences("bridge", MODE_PRIVATE)
-                .getLong("computer_last_seen_at", 0);
         if (computerOnline()) return "已连接电脑：" + trusted;
-        if (lastSeen == 0) return "已配对：" + trusted + " · 正在局域网查找电脑";
-        return "已配对：" + trusted + " · 暂未连通，正在自动重连";
+        ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
+        if (check.phase == ComputerConnection.Phase.CHECKING) {
+            return "已配对：" + trusted + " · 正在检查连接（最多 10 秒）";
+        }
+        return "已配对：" + trusted + " · 未连接";
     }
 
     private void renderRecent(JSONArray items) {
@@ -347,9 +385,8 @@ public class MainActivity extends Activity {
     }
 
     private void showPairRequest() {
-        BridgeService.PairRequest request = BridgeService.pendingPair();
-        boolean pending = request != null && "pending".equals(request.outcome)
-                && System.currentTimeMillis() - request.created < 120000;
+        PairingGate.Request request = BridgeService.pendingPair();
+        boolean pending = request != null;
         if (!pending) {
             if (pairDialog != null) pairDialog.dismiss();
             pairDialog = null;
@@ -362,9 +399,13 @@ public class MainActivity extends Activity {
                 .setTitle("连接小窝？")
                 .setMessage("设备：" + request.name + "\n地址：" + request.address +
                         "\n允许后，猫叼会带你完成必要的手机设置。")
-                .setNegativeButton("拒绝", (dialog, which) -> BridgeService.decidePair(this, false))
+                .setNegativeButton("拒绝", (dialog, which) -> BridgeService.decidePair(this, request.id, false))
                 .setPositiveButton("允许", (dialog, which) -> {
-                    BridgeService.decidePair(this, true);
+                    if (!BridgeService.decidePair(this, request.id, true)) {
+                        Toast.makeText(this, "这条连接请求已失效，请从电脑重新发起", Toast.LENGTH_LONG).show();
+                        mainHandler.post(this::refreshHome);
+                        return;
+                    }
                     BridgeService.requestCaptureSync();
                     mainHandler.post(this::refreshHome);
                     getSharedPreferences("bridge", MODE_PRIVATE).edit()
@@ -543,12 +584,12 @@ public class MainActivity extends Activity {
         body.addView(label("我的小窝", 17, INK, true));
         TextView computer = label(trusted.isEmpty()
                 ? "还没有配对电脑。收藏会先保存在手机里。"
-                : computerConnectionText(trusted), 14, MUTED, false);
+                : "已配对电脑：" + trusted + "。当前连接结果显示在首页。", 14, MUTED, false);
         computer.setPadding(0, dp(5), 0, 0);
         body.addView(computer);
         TextView instructions = label(trusted.isEmpty()
                 ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 ewan-android-phone 电脑端，完成首次配置，再连接猫叼」。手机出现请求后点「允许」。"
-                : "电脑端「猫叼接收」会在后台每 10 秒自动查找手机。两台设备恢复到同一可互访的 Wi-Fi 后，会自动连接并补送待送达收藏，无需重新配对。若持续离线，请确认电脑端接收程序正在运行；仍无法连接时，可让电脑上的 AI 工具（如 Codex）说「重新连接猫叼」，并提供上面的连接地址。", 14, INK, false);
+                : "手机每次检查连接最多 10 秒，首页会显示成功或未连接；点「重新检查」可立即再试。电脑端「猫叼接收」需要保持运行，两台设备需在可互访的同一 Wi-Fi。恢复后收藏会自动补送，无需重新配对。若持续离线，可让电脑上的 AI 工具（如 Codex）说「重新连接猫叼」，并提供这里的连接地址。", 14, INK, false);
         instructions.setPadding(0, dp(12), 0, dp(8));
         body.addView(instructions);
         TextView address = label("连接地址：" + findLocalAddress(), 12, MUTED, false);

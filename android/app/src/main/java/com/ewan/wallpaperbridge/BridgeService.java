@@ -42,10 +42,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URLDecoder;
@@ -53,53 +49,75 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 
 public class BridgeService extends Service {
     public static final int PORT = 8767;
     public static final long COMPUTER_ONLINE_WINDOW_MS = 45000;
+    public static final String ACTION_CHECK_CONNECTION = "com.ewan.wallpaperbridge.CHECK_CONNECTION";
     private static final String CHANNEL = "phone_bridge";
     private static final int MAX_WALLPAPER = 20 * 1024 * 1024;
     private static final long STORAGE_RESERVE = 64L * 1024 * 1024;
     private static volatile BridgeService active;
-    private static volatile PairRequest pending;
-    private static volatile boolean running;
+    private static final PairingGate pairing = new PairingGate(android.os.SystemClock::elapsedRealtime);
     private static int visibleAppActivities;
-    private ServerSocket serverSocket;
-    private DatagramSocket discoverySocket;
+    private static final CopyOnWriteArraySet<Runnable> connectionListeners = new CopyOnWriteArraySet<>();
+    private volatile LocalBridgeServer localServer;
+    private volatile boolean destroyed;
     private SharedPreferences preferences;
     private WindowManager overlayManager;
     private View overlayView;
     private final Object captureWake = new Object();
     private Thread captureWorker;
+    private volatile ComputerConnection computerConnection;
+    private volatile ComputerConnection.Attempt captureAttempt;
 
-    public static final class PairRequest {
-        public final String id;
-        public final String name;
-        public final String address;
-        public final String token;
-        public final long created;
-        volatile String outcome = "pending";
+    public static PairingGate.Request pendingPair() { return pairing.pending(); }
 
-        PairRequest(String name, String address, String token) {
-            this.id = UUID.randomUUID().toString();
-            this.name = name;
-            this.address = address;
-            this.token = token;
-            this.created = System.currentTimeMillis();
-        }
+    public static boolean isRunning() {
+        BridgeService service = active;
+        LocalBridgeServer server = service == null ? null : service.localServer;
+        return server != null && server.isRunning();
     }
 
-    public static PairRequest pendingPair() {
-        PairRequest request = pending;
-        return request != null && request.outcome.equals("pending") &&
-                System.currentTimeMillis() - request.created < 120000 ? request : null;
+    static ComputerConnection.Snapshot computerConnectionSnapshot() {
+        BridgeService service = active;
+        ComputerConnection check = service == null ? null : service.computerConnection;
+        return check == null ? new ComputerConnection.Snapshot(
+                ComputerConnection.Phase.IDLE, 0, 0, 0, "", false) : check.snapshot();
     }
 
-    public static boolean isRunning() { return running; }
+    static void addConnectionListener(Runnable listener) { connectionListeners.add(listener); }
+    static void removeConnectionListener(Runnable listener) { connectionListeners.remove(listener); }
+
+    private synchronized void startConnectionChecks() {
+        if (destroyed || active != this || computerConnection != null
+                || preferences.getString("computer_token", "").isEmpty()) return;
+        computerConnection = new ComputerConnection(attempt -> ComputerConnection.probe(
+                preferences.getString("computer_address", ""), 8793,
+                preferences.getString("computer_token", ""), attempt), snapshot -> {
+            if (snapshot.phase == ComputerConnection.Phase.CONNECTED) {
+                preferences.edit().putLong("computer_receiver_last_seen_at", snapshot.finishedAt).apply();
+                requestCaptureSync();
+            }
+            for (Runnable listener : connectionListeners) listener.run();
+        });
+        computerConnection.request(true);
+    }
+
+    private synchronized void stopConnectionChecks() {
+        ComputerConnection check = computerConnection;
+        computerConnection = null;
+        if (check != null) check.close();
+        for (Runnable listener : connectionListeners) listener.run();
+    }
 
     public static void appActivityStarted() {
         visibleAppActivities++;
@@ -136,25 +154,36 @@ public class BridgeService extends Service {
         return context.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_name", "");
     }
 
-    public static void decidePair(Context context, boolean allow) {
-        PairRequest request = pendingPair();
-        if (request == null) return;
-        if (allow) {
-            context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
+    public static boolean decidePair(Context context, String displayedId, boolean allow) {
+        SharedPreferences settings = context.getSharedPreferences("bridge", MODE_PRIVATE);
+        boolean decided = pairing.decide(displayedId, allow,
+                () -> !settings.getString("computer_token", "").isEmpty(), request -> settings.edit()
                     .putString("computer_token", request.token)
                     .putString("computer_name", request.name)
                     .putString("computer_address", request.address)
-                    .remove("computer_last_seen_at").apply();
+                    .remove("computer_last_seen_at").remove("computer_receiver_last_seen_at").apply());
+        if (!decided) return false;
+        BridgeService service = active;
+        if (service != null) {
+            service.showNotification(allow ? "正在连接小窝" : "已拒绝小窝连接");
+            if (allow) service.startConnectionChecks();
         }
-        request.outcome = allow ? "approved" : "rejected";
-        if (active != null) active.showNotification(allow ? "正在连接小窝" : "已拒绝小窝连接");
+        return true;
     }
 
     public static void revoke(Context context) {
-        context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
+        pairing.revoke(() -> context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
                 .remove("computer_token").remove("computer_name").remove("computer_address")
-                .remove("computer_last_seen_at").apply();
-        if (active != null) active.showNotification("小窝未连接；收藏会先保存在手机");
+                .remove("computer_last_seen_at").remove("computer_receiver_last_seen_at").apply());
+        BridgeService service = active;
+        if (service != null) {
+            service.stopConnectionChecks();
+            ComputerConnection.Attempt attempt = service.captureAttempt;
+            if (attempt != null) attempt.cancel();
+            LocalBridgeServer server = service.localServer;
+            if (server != null) server.closeClients();
+            service.showNotification("小窝未连接；收藏会先保存在手机");
+        }
     }
 
     public static void shareFile(Context context, Uri uri) {
@@ -172,24 +201,37 @@ public class BridgeService extends Service {
                 ? "小窝未连接；收藏会先保存在手机"
                 : setupComplete() ? "小窝连接已设好" : "小窝连接设置待完成"));
         preferences.edit().remove("keep_awake").apply();
+        localServer = new LocalBridgeServer(PORT, 8769, this::handleClient, error -> {
+            if (!destroyed && active == this) showNotification("连接未开启，请重新打开应用");
+        });
         startServer();
-        startDiscovery();
         updateOverlay();
         captureWorker = new Thread(this::captureSyncLoop, "phone-capture-sync");
         captureWorker.start();
+        startConnectionChecks();
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        startServer();
+        if (intent != null && ACTION_CHECK_CONNECTION.equals(intent.getAction())) {
+            startConnectionChecks();
+            ComputerConnection check = computerConnection;
+            if (check != null) check.request(true);
+        }
         return START_STICKY;
     }
 
     @Override public void onDestroy() {
-        running = false;
-        try { if (serverSocket != null) serverSocket.close(); } catch (IOException ignored) { }
-        if (discoverySocket != null) discoverySocket.close();
+        destroyed = true;
+        stopConnectionChecks();
+        LocalBridgeServer server = localServer;
+        if (server != null) server.close();
+        ComputerConnection.Attempt attempt = captureAttempt;
+        if (attempt != null) attempt.cancel();
+        if (captureWorker != null) captureWorker.interrupt();
         removeOverlay();
         synchronized (captureWake) { captureWake.notifyAll(); }
-        active = null;
+        if (active == this) active = null;
         super.onDestroy();
     }
 
@@ -252,63 +294,78 @@ public class BridgeService extends Service {
     }
 
     private void captureSyncLoop() {
-        while (active == this) {
-            try { syncCapturesOnce(); }
+        while (!destroyed && active == this) {
+            boolean more = false;
+            try { more = syncCapturesOnce(); }
             catch (Exception error) {
-                String detail = error.getClass().getSimpleName() + ": " + error.getMessage();
+                String detail = error instanceof ComputerConnection.CheckFailure ? error.getMessage()
+                        : "本次收藏未送达，电脑接收程序暂未确认。";
                 preferences.edit().putString("capture_sync_error",
                         detail.length() > 180 ? detail.substring(0, 180) : detail).apply();
             }
             synchronized (captureWake) {
-                try { captureWake.wait(45000); } catch (InterruptedException ignored) { return; }
+                if (destroyed || active != this) return;
+                try { captureWake.wait(more ? 100 : 45000); } catch (InterruptedException ignored) { return; }
             }
         }
     }
 
-    private void syncCapturesOnce() throws Exception {
+    private boolean syncCapturesOnce() throws Exception {
         String address = preferences.getString("computer_address", "");
         String token = preferences.getString("computer_token", "");
         if (address.isEmpty() || token.isEmpty()) {
             preferences.edit().putString("capture_sync_error", "小窝未连接").apply();
-            return;
+            return false;
         }
         try (CaptureStore store = new CaptureStore(this)) {
             JSONArray items = store.pending(20);
             if (items.length() == 0) {
                 preferences.edit().remove("capture_sync_error").apply();
-                return;
+                return false;
             }
             preferences.edit().putLong("capture_sync_last_attempt_at", System.currentTimeMillis()).apply();
-            JSONObject body = new JSONObject();
-            body.put("items", items);
-            byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
-            HttpURLConnection connection = (HttpURLConnection) new URL("http://" + address + ":8793/captures")
-                    .openConnection();
+            CaptureBatch batch = new CaptureBatch();
+            Set<String> sentIds = new HashSet<>();
+            for (int index = 0; index < items.length(); index++) {
+                if (!batch.add(items.getJSONObject(index).toString())) break;
+                sentIds.add(items.getJSONObject(index).getString("id"));
+            }
+            if (batch.count() == 0) throw new IOException("这条收藏过大，暂时无法送达");
+            byte[] payload = batch.payload();
+            ComputerConnection.Attempt attempt = new ComputerConnection.Attempt(ComputerConnection.TIMEOUT_MS);
+            captureAttempt = attempt;
+            Timer deadline = new Timer("catdiao-capture-deadline", true);
+            deadline.schedule(new TimerTask() {
+                @Override public void run() { attempt.cancel(); }
+            }, ComputerConnection.TIMEOUT_MS);
             try {
-                connection.setConnectTimeout(3000);
-                connection.setReadTimeout(6000);
-                connection.setRequestMethod("POST");
-                connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                connection.setRequestProperty("X-Phone-Token", token);
-                connection.setFixedLengthStreamingMode(payload.length);
-                try (OutputStream output = connection.getOutputStream()) { output.write(payload); }
-                int responseCode = connection.getResponseCode();
-                if (responseCode != 200) {
-                    preferences.edit().putString("capture_sync_error", "小窝返回 HTTP " + responseCode).apply();
-                    return;
+                if (destroyed || active != this) throw new IOException("手机服务已停止");
+                ComputerConnection.Reply response = ComputerConnection.exchange(address, 8793, "POST", "/captures",
+                        "X-Phone-Token", token, payload, attempt);
+                if (response.code != 200) {
+                    throw new ComputerConnection.CheckFailure(response.code == 403
+                            ? "电脑没有确认当前配对，请查看「小窝连接」。"
+                            : "电脑暂未接收这批收藏，稍后会重试。");
                 }
-                ByteArrayOutputStream response = new ByteArrayOutputStream();
-                try (InputStream input = connection.getInputStream()) {
-                    byte[] buffer = new byte[4096];
-                    int count;
-                    while ((count = input.read(buffer)) != -1 && response.size() < 65536) response.write(buffer, 0, count);
+                JSONObject reply = new JSONObject(new String(response.body, StandardCharsets.UTF_8));
+                JSONArray acknowledged = reply.optJSONArray("accepted");
+                JSONArray accepted = new JSONArray();
+                if (acknowledged != null) for (int index = 0; index < acknowledged.length(); index++) {
+                    String id = acknowledged.optString(index);
+                    if (sentIds.contains(id)) accepted.put(id);
                 }
-                JSONObject reply = new JSONObject(response.toString("UTF-8"));
-                store.acknowledge(reply.optJSONArray("accepted") == null ? new JSONArray() : reply.getJSONArray("accepted"));
+                if (accepted.length() == 0) throw new ComputerConnection.CheckFailure(
+                        "电脑尚未确认本批收藏，猫叼会保留它们并重试。");
+                if (destroyed || active != this || !token.equals(preferences.getString("computer_token", ""))) return false;
+                store.acknowledge(accepted);
                 preferences.edit().remove("capture_sync_error")
                         .putLong("capture_sync_last_success_at", System.currentTimeMillis()).apply();
-            } finally { connection.disconnect(); }
+                return store.pendingCount() > 0;
+            } finally {
+                deadline.cancel();
+                attempt.cancel();
+                if (captureAttempt == attempt) captureAttempt = null;
+            }
         }
     }
 
@@ -327,82 +384,37 @@ public class BridgeService extends Service {
     }
 
     private void startServer() {
-        running = true;
-        new Thread(() -> {
-            try (ServerSocket server = new ServerSocket()) {
-                server.setReuseAddress(true);
-                server.bind(new InetSocketAddress(PORT));
-                serverSocket = server;
-                while (running) {
-                    try (Socket client = server.accept()) {
-                        client.setSoTimeout(20000);
-                        if (!isLocal(client.getInetAddress())) {
-                            respond(client.getOutputStream(), 403, "仅允许局域网", "text/plain", null);
-                            continue;
-                        }
-                        try {
-                            handle(client);
-                        } catch (Exception error) {
-                            try {
-                                json(client.getOutputStream(), 500,
-                                        new JSONObject().put("error", "手机处理请求失败：" +
-                                                (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage())));
-                            } catch (Exception ignored) { }
-                        }
-                    } catch (Exception ignored) {
-                        if (!running) break;
-                    }
-                }
-            } catch (IOException error) {
-                running = false;
-                showNotification("连接未开启，请重新打开应用");
-            } finally { serverSocket = null; }
-        }, "phone-bridge-server").start();
+        LocalBridgeServer server = localServer;
+        if (destroyed || active != this || server == null) return;
+        try { server.start(); }
+        catch (IOException error) { showNotification("连接未开启，请重新打开应用"); }
     }
 
     private boolean isLocal(InetAddress address) {
         return address.isSiteLocalAddress() || address.isLoopbackAddress();
     }
 
-    private void startDiscovery() {
-        new Thread(() -> {
-            try (DatagramSocket socket = new DatagramSocket(8769)) {
-                discoverySocket = socket;
-                socket.setSoTimeout(2000);
-                while (running) {
-                    byte[] buffer = new byte[128];
-                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    try { socket.receive(packet); }
-                    catch (SocketTimeoutException ignored) { continue; }
-                    if (!isLocal(packet.getAddress())) continue;
-                    String message = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.US_ASCII);
-                    if (!message.equals("PHONE_BRIDGE_DISCOVER_V1")) continue;
-                    byte[] answer = "PHONE_BRIDGE_V1:8767".getBytes(StandardCharsets.US_ASCII);
-                    socket.send(new DatagramPacket(answer, answer.length,
-                            packet.getAddress(), packet.getPort()));
-                }
-            } catch (IOException ignored) {
-                // A saved address remains usable if this Wi-Fi blocks broadcast discovery.
-            } finally { discoverySocket = null; }
-        }, "phone-bridge-discovery").start();
+    private void handleClient(LocalBridgeServer.Client session) throws Exception {
+        Socket client = session.socket;
+        if (!isLocal(client.getInetAddress())) {
+            respond(client.getOutputStream(), 403, "仅允许局域网", "text/plain", null);
+            return;
+        }
+        try { handle(session); }
+        catch (Exception error) {
+            try {
+                json(client.getOutputStream(), 500, new JSONObject().put("error", "手机处理请求失败：" +
+                        (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage())));
+            } catch (Exception ignored) { }
+        }
     }
 
 
-    private void handle(Socket client) throws Exception {
+    private void handle(LocalBridgeServer.Client session) throws Exception {
+        Socket client = session.socket;
         InputStream input = client.getInputStream();
         OutputStream output = client.getOutputStream();
-        ByteArrayOutputStream header = new ByteArrayOutputStream();
-        int matched = 0;
-        while (header.size() < 8192) {
-            int b = input.read();
-            if (b < 0) return;
-            header.write(b);
-            if (b == "\r\n\r\n".charAt(matched)) matched++;
-            else matched = b == '\r' ? 1 : 0;
-            if (matched == 4) break;
-        }
-        if (matched != 4) { respond(output, 400, "请求头过长", "text/plain", null); return; }
-        String[] lines = header.toString(StandardCharsets.US_ASCII.name()).split("\r\n");
+        String[] lines = session.readHeaders().split("\r\n");
         String[] request = lines[0].split(" ");
         if (request.length < 2) { respond(output, 400, "请求无效", "text/plain", null); return; }
         String method = request[0], path = request[1];
@@ -418,10 +430,13 @@ public class BridgeService extends Service {
             catch (NumberFormatException error) { respond(output, 400, "长度无效", "text/plain", null); return; }
         }
         if (length < 0) { respond(output, 400, "长度无效", "text/plain", null); return; }
+        // Small JSON bodies have a total deadline; file uploads retain their progress timeout.
+        if (length > 0 && !request[1].equals("/file") && !request[1].equals("/wallpaper/home"))
+            session.watchBody(20000);
 
         if (method.equals("GET") && path.equals("/hello")) {
             JSONObject result = new JSONObject().put("name", "猫叼")
-                    .put("version", "1.11").put("paired", !preferences.getString("computer_token", "").isEmpty())
+                    .put("version", "1.13").put("paired", !preferences.getString("computer_token", "").isEmpty())
                     .put("setup_complete", setupComplete())
                     .put("model", Build.MODEL);
             json(output, 200, result); return;
@@ -429,6 +444,7 @@ public class BridgeService extends Service {
         if (method.equals("POST") && path.equals("/pair")) {
             if (length > 8192) { json(output, 413, new JSONObject().put("error", "连接请求过长")); return; }
             JSONObject body = readJson(input, (int) length);
+            session.bodyReceived();
             String name = body.optString("name", "小窝").trim();
             String token = body.optString("token", "");
             if (name.length() < 1 || name.length() > 60 || !token.matches("[a-fA-F0-9]{64}")) {
@@ -437,19 +453,21 @@ public class BridgeService extends Service {
             if (!preferences.getString("computer_token", "").isEmpty()) {
                 json(output, 409, new JSONObject().put("error", "已有小窝连接；如需更换，请在猫叼的「小窝连接」中移除")); return;
             }
-            PairRequest pair = new PairRequest(name, client.getInetAddress().getHostAddress(), token);
-            pending = pair;
+            PairingGate.Request pair = pairing.offer(name, client.getInetAddress().getHostAddress(), token,
+                    () -> !preferences.getString("computer_token", "").isEmpty());
+            if (pair == null) {
+                json(output, 409, new JSONObject().put("error", "已有小窝连接或连接请求，请先在猫叼处理"));
+                return;
+            }
             showNotification("打开猫叼确认小窝连接：" + name);
             json(output, 202, new JSONObject().put("id", pair.id).put("state", "pending")); return;
         }
         if (method.equals("GET") && path.startsWith("/pair-status?id=")) {
-            PairRequest pair = pending;
             String id = path.substring("/pair-status?id=".length());
-            if (pair == null || !pair.id.equals(id)) {
+            String state = pairing.status(id);
+            if (state == null) {
                 json(output, 404, new JSONObject().put("error", "请求已失效")); return;
             }
-            String state = System.currentTimeMillis() - pair.created > 120000 && pair.outcome.equals("pending")
-                    ? "expired" : pair.outcome;
             json(output, 200, new JSONObject().put("state", state)); return;
         }
         String expected = preferences.getString("computer_token", "");
@@ -462,6 +480,8 @@ public class BridgeService extends Service {
         if (!currentComputerAddress.equals(preferences.getString("computer_address", ""))) {
             preferences.edit().putString("computer_address", currentComputerAddress).apply();
             requestCaptureSync();
+            ComputerConnection check = computerConnection;
+            if (check != null) check.request(false);
         }
         if (method.equals("GET") && path.equals("/heartbeat")) {
             requestCaptureSync();
@@ -480,6 +500,10 @@ public class BridgeService extends Service {
                 json(output, 413, new JSONObject().put("error", "文字不能超过 256 KB")); return;
             }
             JSONObject body = readJson(input, (int) length);
+            session.bodyReceived();
+            if (!constantTimeEquals(preferences.getString("computer_token", ""), supplied)) {
+                json(output, 401, new JSONObject().put("error", "这台小窝的连接已移除")); return;
+            }
             Object value = body.opt("text");
             if (!(value instanceof String) || ((String) value).isEmpty()) {
                 json(output, 400, new JSONObject().put("error", "请提供要复制的文字")); return;
@@ -503,6 +527,10 @@ public class BridgeService extends Service {
             json(output, 404, new JSONObject().put("error", "没有这个操作")); return;
         }
         JSONObject body = readJson(input, (int) length);
+        session.bodyReceived();
+        if (!constantTimeEquals(preferences.getString("computer_token", ""), supplied)) {
+            json(output, 401, new JSONObject().put("error", "这台小窝的连接已移除")); return;
+        }
         if (path.equals("/volume")) { setVolume(output, body); return; }
         if (path.equals("/brightness")) { setBrightness(output, body); return; }
         if (path.equals("/open")) { openApp(output, body); return; }
@@ -606,6 +634,7 @@ public class BridgeService extends Service {
         StatFs storage = new StatFs(Environment.getDataDirectory().getPath());
         ActivityManager.MemoryInfo memory = new ActivityManager.MemoryInfo();
         ((ActivityManager) getSystemService(ACTIVITY_SERVICE)).getMemoryInfo(memory);
+        ComputerConnection.Snapshot check = computerConnectionSnapshot();
         return new JSONObject().put("model", Build.MANUFACTURER + " " + Build.MODEL)
                 .put("android", Build.VERSION.RELEASE)
                 .put("battery_percent", scale > 0 ? level * 100 / scale : -1)
@@ -629,6 +658,14 @@ public class BridgeService extends Service {
                 .put("capture_sync_last_attempt_at", preferences.getLong("capture_sync_last_attempt_at", 0))
                 .put("capture_sync_last_success_at", preferences.getLong("capture_sync_last_success_at", 0))
                 .put("computer_last_seen_at", preferences.getLong("computer_last_seen_at", 0))
+                .put("computer_receiver_last_seen_at", preferences.getLong("computer_receiver_last_seen_at", 0))
+                .put("computer_connection_state", check.phase.name().toLowerCase(Locale.ROOT))
+                .put("computer_check_started_at", check.startedAt)
+                .put("computer_check_finished_at", check.finishedAt)
+                .put("computer_check_error", check.error)
+                .put("computer_retry_in_progress", check.attemptRunning)
+                .put("computer_retry_started_at", check.attemptStartedAt)
+                .put("computer_retry_remaining_ms", check.remainingMs())
                 .put("computer_address", preferences.getString("computer_address", ""))
                 .put("shared_file_selected", !preferences.getString("shared_uri", "").isEmpty());
     }

@@ -25,3 +25,4 @@ collector.env
 # Only the reviewed APK is distributed with the skill
 *.apk
 !ewan-android-phone/assets/cat-diao-android-1.8.apk
+!ewan-android-phone/assets/cat-diao-android-1.13.apk

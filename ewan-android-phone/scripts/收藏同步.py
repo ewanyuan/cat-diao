@@ -1,17 +1,21 @@
 """Receive saved phone links, index them in WeKnora, and maintain monthly Excel ledgers."""
 
 import argparse
+from contextlib import contextmanager
+import hashlib
 import hmac
 import ipaddress
 import json
 import os
+import secrets
+import socket
 import sqlite3
 import threading
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlsplit
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -30,6 +34,9 @@ ENV_FILE = nest_paths.env_file()
 PORT = 8793
 KB_NAME = "手机随手收藏"
 PHONE_CONNECTION_INTERVAL_S = 10
+PHONE_CONNECTION_TIMEOUT_S = 9.5
+PHONE_CONNECTION_STATE = {"state": "not_started", "started_at": 0, "finished_at": 0}
+PHONE_CONNECTION_LOCK = threading.Lock()
 HEADERS = ["收藏ID", "收藏时间", "来源", "分享文字", "链接", "入库状态", "全文状态", "WeKnora资料ID", "WeKnora网页ID", "AI处理状态", "AI反馈", "反馈时间", "备注"]
 LOCK = threading.RLock()
 
@@ -48,6 +55,16 @@ def database():
     )""")
     db.commit()
     return db
+
+
+@contextmanager
+def managed_database():
+    db = database()
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
 
 
 def weknora_client():
@@ -104,6 +121,15 @@ def month_path(timestamp_ms):
     return DATA / f"{month}.xlsx"
 
 
+def save_workbook(workbook, path):
+    temporary = path.with_name(path.name + "." + secrets.token_hex(6) + ".tmp")
+    try:
+        workbook.save(temporary)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def ledger(timestamp_ms):
     path = month_path(timestamp_ms)
     if path.exists():
@@ -123,42 +149,69 @@ def ledger(timestamp_ms):
     for col, width in zip("ABCDEFGHIJKLM", widths):
         sheet.column_dimensions[col].width = width
     sheet.row_dimensions[1].height = 30
-    workbook.save(path)
+    try:
+        save_workbook(workbook, path)
+    finally:
+        workbook.close()
     return path
 
 
 def sync_ledger(row):
-    path = ledger(row["created_at"])
-    workbook = load_workbook(path)
-    sheet = workbook["收藏与反馈"]
-    target = next((number for number in range(2, sheet.max_row + 1)
-                   if sheet.cell(number, 1).value == row["id"]), sheet.max_row + 1)
-    existing_feedback = sheet.cell(target, 11).value if target <= sheet.max_row else None
-    existing_ai_status = sheet.cell(target, 10).value if target <= sheet.max_row else None
-    existing_feedback_at = sheet.cell(target, 12).value if target <= sheet.max_row else None
-    values = [
-        row["id"], datetime.fromtimestamp(row["created_at"] / 1000).strftime("%Y-%m-%d %H:%M:%S"),
-        row["source"], row["shared_text"], row["url"], row["status"],
-        row["full_text_status"], row["note_id"], row["page_id"],
-        row["ai_status"] if row["ai_status"] != "未处理" else (existing_ai_status or "未处理"),
-        row["ai_feedback"] or existing_feedback or "", row["feedback_at"] or existing_feedback_at or "", row["remark"],
-    ]
-    if target <= sheet.max_row and all(sheet.cell(target, column).value == value
-                                       for column, value in enumerate(values, 1)):
-        workbook.close()
-        return
-    for column, value in enumerate(values, 1):
-        cell = sheet.cell(target, column, value)
-        cell.data_type = "s"
-        cell.font = Font(name="Arial", size=10)
-        cell.alignment = Alignment(vertical="top", wrap_text=column in (4, 11, 13))
-    sheet.auto_filter.ref = f"A1:M{sheet.max_row}"
-    workbook.save(path)
+    sync_ledgers([row])
+
+
+def sync_ledgers(rows, skip_locked=False):
+    months = {}
+    for row in rows:
+        months.setdefault(month_path(row["created_at"]), []).append(row)
+    for path, monthly_rows in months.items():
+        workbook = None
+        try:
+            ledger(monthly_rows[0]["created_at"])
+            workbook = load_workbook(path)
+            sheet = workbook["收藏与反馈"]
+            locations = {sheet.cell(number, 1).value: number for number in range(2, sheet.max_row + 1)}
+            changed = False
+            for row in monthly_rows:
+                target = locations.get(row["id"], sheet.max_row + 1)
+                feedback = sheet.cell(target, 11).value if target <= sheet.max_row else None
+                ai_status = sheet.cell(target, 10).value if target <= sheet.max_row else None
+                feedback_at = sheet.cell(target, 12).value if target <= sheet.max_row else None
+                user_remark = sheet.cell(target, 13).value if target <= sheet.max_row else None
+                remark = str(user_remark or "")
+                if row["remark"] and row["remark"] not in remark.splitlines():
+                    remark = (remark + "\n" if remark else "") + row["remark"]
+                values = [
+                    row["id"], datetime.fromtimestamp(row["created_at"] / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+                    row["source"], row["shared_text"], row["url"], row["status"],
+                    row["full_text_status"], row["note_id"], row["page_id"],
+                    row["ai_status"] if row["ai_status"] != "未处理" else (ai_status or "未处理"),
+                    row["ai_feedback"] or feedback or "", row["feedback_at"] or feedback_at or "", remark,
+                ]
+                if target <= sheet.max_row and all(sheet.cell(target, column).value == value
+                                                   for column, value in enumerate(values, 1)):
+                    continue
+                for column, value in enumerate(values, 1):
+                    cell = sheet.cell(target, column, value)
+                    cell.data_type = "s"
+                    cell.font = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(vertical="top", wrap_text=column in (4, 11, 13))
+                locations[row["id"]] = target
+                changed = True
+            if changed:
+                sheet.auto_filter.ref = f"A1:M{sheet.max_row}"
+                save_workbook(workbook, path)
+        except PermissionError:
+            if not skip_locked:
+                raise
+        finally:
+            if workbook is not None:
+                workbook.close()
 
 
 def receive(items):
     accepted = []
-    with LOCK, database() as db:
+    with LOCK, managed_database() as db:
         for item in items:
             identifier = str(item.get("id", ""))
             if not identifier or len(identifier) > 80:
@@ -173,12 +226,9 @@ def receive(items):
                        (identifier, stamp, source, text, url, "已到电脑，待入库"))
             accepted.append(identifier)
         db.commit()
-        for identifier in accepted:
-            row = db.execute("SELECT * FROM captures WHERE id=?", (identifier,)).fetchone()
-            try:
-                sync_ledger(row)
-            except PermissionError:
-                pass  # A workbook open in Excel will be refreshed on the next process pass.
+        rows = [db.execute("SELECT * FROM captures WHERE id=?", (identifier,)).fetchone()
+                for identifier in accepted]
+        sync_ledgers(rows, skip_locked=True)
     return accepted
 
 
@@ -215,11 +265,13 @@ def process_one(db, row, client, kb_id):
         db.execute("UPDATE captures SET full_text_status=? WHERE id=?",
                    ("无链接，保留分享文字" if not row["url"] else row["full_text_status"], identifier))
     db.commit()
-    sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (identifier,)).fetchone())
+    with LOCK:
+        sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (identifier,)).fetchone())
 
 
 def process_pending():
-    with LOCK, database() as db:
+    # Remote knowledge requests must not hold the local receipt / workbook lock.
+    with managed_database() as db:
         rows = db.execute("SELECT * FROM captures WHERE note_id='' OR (page_id!='' AND full_text_status='网页抓取已提交，待确认') OR status='已到电脑，待入库'").fetchall()
         if not rows:
             return
@@ -236,7 +288,8 @@ def process_pending():
                     elif state.lower() in ("failed", "error"):
                         db.execute("UPDATE captures SET full_text_status='待补全文' WHERE id=?", (row["id"],))
                     db.commit()
-                    sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (row["id"],)).fetchone())
+                    with LOCK:
+                        sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (row["id"],)).fetchone())
                 except Exception:
                     pass
                 continue
@@ -247,46 +300,75 @@ def process_pending():
                            (str(error)[:300], row["id"]))
                 db.commit()
                 try:
-                    sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (row["id"],)).fetchone())
+                    with LOCK:
+                        sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (row["id"],)).fetchone())
                 except PermissionError:
                     pass
 
 
 def refresh_ledgers():
-    with LOCK, database() as db:
-        for row in db.execute("SELECT * FROM captures").fetchall():
-            try:
-                sync_ledger(row)
-            except PermissionError:
-                pass
+    with LOCK, managed_database() as db:
+        sync_ledgers(db.execute("SELECT * FROM captures").fetchall(), skip_locked=True)
 
 
 def maintain_phone_connection():
-    saved = phone_bridge.config_read()
-    token = saved.get("token", "")
-    if not token:
-        return
-    address = saved.get("address", "")
-    if address and phone_bridge.is_reachable(address):
-        try:
-            phone_bridge.request(address, "GET", "/heartbeat", token, timeout=3)
+    global PHONE_CONNECTION_STATE
+    started = time.monotonic()
+    started_at = int(time.time() * 1000)
+    deadline = started + PHONE_CONNECTION_TIMEOUT_S
+    state = "not_connected"
+    stage = "saved_address"
+    address = ""
+    with PHONE_CONNECTION_LOCK:
+        PHONE_CONNECTION_STATE = {"state": "checking", "started_at": started_at, "finished_at": 0}
+    try:
+        saved = phone_bridge.config_read(deadline)
+        token = saved.get("token", "")
+        if not token:
+            state = "unpaired"
             return
-        except RuntimeError:
+        address = saved.get("address", "")
+        if address:
             try:
-                # Keep older paired apps reachable until their update is installed.
-                phone_bridge.request(address, "GET", "/status", token, timeout=3)
+                reply = phone_bridge.request(address, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
+                if not isinstance(reply, dict) or reply.get("connected") is not True:
+                    raise RuntimeError("手机未确认连接")
+                state = "connected" if phone_bridge.update_pair_address(token, address, deadline) else "pairing_changed"
                 return
+            except RuntimeError:
+                try:
+                    # Keep older paired apps reachable until their update is installed.
+                    reply = phone_bridge.request(address, "GET", "/status", token, timeout=3, deadline=deadline)
+                    if not isinstance(reply, dict) or not reply.get("model"):
+                        raise RuntimeError("手机未确认连接")
+                    state = "connected" if phone_bridge.update_pair_address(token, address, deadline) else "pairing_changed"
+                    return
+                except Exception:
+                    pass
             except Exception:
                 pass
-        except Exception:
-            pass
-    found = phone_bridge.discover(token)
-    if not found:
-        return
-    latest = phone_bridge.config_read()
-    if latest.get("token") == token and latest.get("address") != found:
-        latest["address"] = found
-        phone_bridge.config_save(latest)
+        stage = "discovery"
+        found = phone_bridge.discover(token, deadline=deadline)
+        if not found:
+            return
+        if phone_bridge.update_pair_address(token, found, deadline):
+            address = found
+            state = "connected"
+        else:
+            state = "pairing_changed"
+    finally:
+        elapsed = round((time.monotonic() - started) * 1000)
+        if state != "connected" and time.monotonic() >= deadline:
+            state = "timed_out"
+        with PHONE_CONNECTION_LOCK:
+            PHONE_CONNECTION_STATE = {"state": state, "stage": stage, "address": address,
+                                      "started_at": started_at, "finished_at": int(time.time() * 1000),
+                                      "elapsed_ms": elapsed}
+
+
+def phone_connection_state():
+    with PHONE_CONNECTION_LOCK:
+        return dict(PHONE_CONNECTION_STATE)
 
 
 def same_lan(remote):
@@ -299,18 +381,78 @@ def same_lan(remote):
         if not ip.is_private:
             return False
         return any(ip in ipaddress.IPv4Network(f"{local}/{mask}", strict=False)
-                   for local, mask in phone_bridge.local_interfaces())
+                   for local, mask in phone_bridge.local_interfaces(deadline=time.monotonic() + 2))
     except (OSError, ValueError):
         return False
 
 
 class Receiver(BaseHTTPRequestHandler):
+    HEADER_TIMEOUT_S = 9.5
+    BODY_TIMEOUT_S = 20
+
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(20)
+        self._header_finished = threading.Event()
+        self._header_expired = threading.Event()
+
+        def expire_header():
+            if not self._header_finished.is_set():
+                self._header_expired.set()
+                try:
+                    self.connection.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                self.connection.close()
+
+        self._header_watchdog = threading.Timer(self.HEADER_TIMEOUT_S, expire_header)
+        self._header_watchdog.daemon = True
+        self._header_watchdog.start()
+
+    def parse_request(self):
+        try:
+            parsed = super().parse_request()
+            return parsed and not self._header_expired.is_set()
+        except OSError:
+            if self._header_expired.is_set():
+                return False
+            raise
+        finally:
+            self._header_finished.set()
+            self._header_watchdog.cancel()
+
+    def finish(self):
+        self._header_finished.set()
+        self._header_watchdog.cancel()
+        super().finish()
+
+    def read_payload(self, length):
+        def expire_body():
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+        deadline = threading.Timer(self.BODY_TIMEOUT_S, expire_body)
+        deadline.daemon = True
+        deadline.start()
+        try:
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                raise ValueError("请求内容未传完，请重试")
+            return raw
+        finally:
+            deadline.cancel()
+
     def do_GET(self):
         if self.path == "/health" and self.client_address[0] in ("127.0.0.1", "::1"):
-            return self.respond(200, {"service": "catdiao-nest"})
+            return self.respond(200, {"service": "catdiao-nest", "version": "1.13",
+                                      "phone_connection": phone_connection_state()})
+        if urlsplit(self.path).path == "/connection-check":
+            return self.check_connection()
         if self.path not in ("/phone-bridge.apk", "/cat-diao.apk") or not same_lan(self.client_address[0]):
             return self.respond(404, {"error": "未找到"})
-        apk = ROOT / "cat-diao-android-1.11.apk"
+        apk = ROOT / "cat-diao-android-1.13.apk"
         if not apk.is_file():
             return self.respond(404, {"error": "安装包尚未生成"})
         self.send_response(200)
@@ -326,9 +468,29 @@ class Receiver(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def check_connection(self):
+        if not same_lan(self.client_address[0]):
+            return self.respond(403, {"error": "未授权"})
+        try:
+            token = phone_bridge.config_read().get("token", "")
+            challenge = parse_qs(urlsplit(self.path).query).get("challenge", [""])[0]
+            if not token or len(challenge) != 32 or any(char not in "0123456789abcdef" for char in challenge):
+                return self.respond(403, {"error": "未授权"})
+            expected = hmac.new(token.encode("utf-8"), ("request:" + challenge).encode("ascii"),
+                                hashlib.sha256).hexdigest()
+            supplied = self.headers.get("X-CatDiao-Auth", "")
+            if len(supplied) != 64 or any(char not in "0123456789abcdef" for char in supplied) or not hmac.compare_digest(expected, supplied):
+                return self.respond(403, {"error": "未授权"})
+            proof = hmac.new(token.encode("utf-8"), ("response:" + challenge).encode("ascii"),
+                             hashlib.sha256).hexdigest()
+            return self.respond(200, {"service": "catdiao-nest", "connected": True},
+                                {"X-CatDiao-Proof": proof})
+        except (OSError, ValueError):
+            return self.respond(503, {"error": "连接信息暂时不可用"})
+
     def do_POST(self):
         try:
-            saved = json.loads(PAIRING.read_text(encoding="utf-8"))
+            saved = phone_bridge.config_read()
             expected = saved.get("token", "")
             if self.path not in ("/captures", "/clipboard", "/file-ready") or not same_lan(self.client_address[0]) or not expected or not hmac.compare_digest(
                     self.headers.get("X-Phone-Token", ""), expected):
@@ -336,11 +498,13 @@ class Receiver(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if length < 1 or length > (700000 if self.path == "/captures" else 262144 if self.path == "/clipboard" else 4096):
                 return self.respond(413, {"error": "请求过大"})
+            raw = self.read_payload(length)
+            if phone_bridge.config_read().get("token") != expected:
+                return self.respond(403, {"error": "配对已改变，请重新发送"})
             if self.path == "/file-ready":
-                self.rfile.read(length)
                 destination = phone_bridge.receive_phone_file(self.client_address[0], expected)
                 return self.respond(200, {"saved": str(destination)})
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            payload = json.loads(raw.decode("utf-8"))
             if self.path == "/clipboard":
                 value = payload.get("text")
                 if not isinstance(value, str) or not value:
@@ -356,18 +520,44 @@ class Receiver(BaseHTTPRequestHandler):
             self.respond(502 if self.path == "/file-ready" else 500,
                          {"error": str(error)[:160]})
 
-    def respond(self, code, payload):
+    def respond(self, code, payload, headers=None):
         if self.command == "POST" and self.path == "/captures":
             print(f"收藏接收请求：{self.client_address[0]}，HTTP {code}", flush=True)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
     def log_message(self, format, *args):
         return
+
+
+class ReceiverServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, address, handler, max_clients=8):
+        self._client_slots = threading.BoundedSemaphore(max_clients)
+        super().__init__(address, handler)
+
+    def process_request(self, request, client_address):
+        if not self._client_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._client_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._client_slots.release()
 
 
 def main():
@@ -377,7 +567,7 @@ def main():
     parser.add_argument("--ai-status", default="已处理", help="AI 处理状态")
     parser.add_argument("--text", help="AI 的实际反馈内容")
     args = parser.parse_args()
-    with database() as db:
+    with managed_database() as db:
         if args.command == "status":
             print(json.dumps({"rows": db.execute("SELECT count(*) FROM captures").fetchone()[0],
                               "kb": json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else None}, ensure_ascii=False))
@@ -413,16 +603,17 @@ def main():
             time.sleep(45)
     def phone_connection_worker():
         while True:
+            started = time.monotonic()
             try:
                 maintain_phone_connection()
             except Exception:
                 pass
-            time.sleep(PHONE_CONNECTION_INTERVAL_S)
+            time.sleep(max(0.05, PHONE_CONNECTION_INTERVAL_S - (time.monotonic() - started)))
 
+    server = ReceiverServer(("0.0.0.0", PORT), Receiver)
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=phone_connection_worker, daemon=True,
                      name="catdiao-phone-connection").start()
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Receiver)
     print(f"手机收藏接收已开启，端口 {PORT}", flush=True)
     server.serve_forever()
 

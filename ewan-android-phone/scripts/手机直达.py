@@ -1,6 +1,7 @@
 """Control the owner's Android phone through the locally approved phone bridge."""
 
 import argparse
+from contextlib import contextmanager
 import ctypes
 import hmac
 import http.client
@@ -11,6 +12,7 @@ import mimetypes
 import os
 import re
 import secrets
+import select
 import socket
 import subprocess
 import sys
@@ -25,10 +27,12 @@ import nest_paths
 CONFIG = nest_paths.pairing_file()
 DEFAULT_ADDRESS = "http://127.0.0.1:8767"
 CLIPBOARD_RECEIVER_PORT = 8791
+DISCOVERY_PORT = 8769
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
 RESERVED_FILE_NAMES = set()
+CONFIG_WRITE_LOCK = threading.RLock()
 
 
 def windows_clipboard_functions():
@@ -104,15 +108,94 @@ def write_windows_clipboard(value):
             kernel.GlobalFree(handle)
 
 
-def config_read():
-    if CONFIG.is_file():
-        return json.loads(CONFIG.read_text(encoding="utf-8"))
-    return {}
+def config_read(deadline=None):
+    deadline = deadline if deadline is not None else time.monotonic() + 0.5
+    with config_thread_lock(deadline):
+        while True:
+            try:
+                return json.loads(CONFIG.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                return {}
+            except PermissionError:
+                # Windows can briefly deny a read while another process replaces the file.
+                time.sleep(min(0.02, remaining_timeout(deadline, 0.02)))
 
 
-def config_save(data):
+@contextmanager
+def config_thread_lock(deadline):
+    if not CONFIG_WRITE_LOCK.acquire(timeout=remaining_timeout(deadline, 2)):
+        raise TimeoutError("连接信息正被更新，请重试")
+    try:
+        yield
+    finally:
+        CONFIG_WRITE_LOCK.release()
+
+
+@contextmanager
+def config_writer(deadline=None):
+    deadline = deadline if deadline is not None else time.monotonic() + 2
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    with config_thread_lock(deadline), CONFIG.with_name(CONFIG.name + ".lock").open("a+b") as lock:
+        if lock.seek(0, os.SEEK_END) == 0:
+            lock.write(b"\0")
+            lock.flush()
+        acquired = False
+        try:
+            while not acquired:
+                remaining_timeout(deadline, 2)
+                lock.seek(0)
+                try:
+                    if sys.platform == "win32":
+                        import msvcrt
+                        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                except OSError:
+                    time.sleep(min(0.02, remaining_timeout(deadline, 0.02)))
+            yield deadline
+        finally:
+            if acquired:
+                lock.seek(0)
+                if sys.platform == "win32":
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def save_config_locked(data, deadline):
+    value = json.dumps(data, ensure_ascii=False, indent=2)
+    temporary = CONFIG.with_name(CONFIG.name + "." + secrets.token_hex(6) + ".tmp")
+    try:
+        with temporary.open("x", encoding="utf-8") as file:
+            file.write(value)
+            file.flush()
+            os.fsync(file.fileno())
+        while True:
+            try:
+                os.replace(temporary, CONFIG)
+                break
+            except PermissionError:
+                time.sleep(min(0.02, remaining_timeout(deadline, 0.02)))
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def config_save(data, deadline=None):
+    with config_writer(deadline) as finish_by:
+        save_config_locked(data, finish_by)
+
+
+def update_pair_address(token, address, deadline=None):
+    with config_writer(deadline) as finish_by:
+        saved = config_read()
+        if saved.get("token") != token:
+            return False
+        if saved.get("address") != address:
+            saved["address"] = address
+            save_config_locked(saved, finish_by)
+        return True
 
 
 def target(address):
@@ -125,11 +208,20 @@ def target(address):
     return parsed.hostname, parsed.port
 
 
-def source_ip(remote):
+def remaining_timeout(deadline, maximum):
+    if deadline is None:
+        return maximum
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("连接检查超时")
+    return min(maximum, remaining)
+
+
+def source_ip(remote, deadline=None):
     destination = ipaddress.ip_address(remote)
     if destination.is_loopback:
         return None
-    for address, mask in local_interfaces():
+    for address, mask in local_interfaces(deadline=deadline):
         try:
             if destination in ipaddress.IPv4Network(f"{address}/{mask}", strict=False):
                 return address
@@ -138,10 +230,14 @@ def source_ip(remote):
     return None
 
 
-def local_interfaces():
+def local_interfaces(deadline=None):
     interfaces = []
     if sys.platform == "win32":
-        result = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="replace", check=False)
+        try:
+            result = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="replace",
+                                    check=False, timeout=remaining_timeout(deadline, 2))
+        except (OSError, subprocess.SubprocessError):
+            return []
         for block in re.split(r"\r?\n\s*\r?\n", result.stdout):
             found = re.findall(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", block)
             if len(found) >= 2:
@@ -154,6 +250,9 @@ def local_interfaces():
                     pass
     if interfaces:
         return interfaces
+    if deadline is not None:
+        # A hostname lookup has no portable cancellation; do not exceed a check deadline.
+        return []
     addresses = []
     try:
         addresses += socket.gethostbyname_ex(socket.gethostname())[2]
@@ -162,67 +261,88 @@ def local_interfaces():
     return [(ip, "255.255.255.0") for ip in addresses if ipaddress.ip_address(ip).is_private]
 
 
-def discover(token=None):
+def discover(token=None, deadline=None):
+    deadline = deadline if deadline is not None else time.monotonic() + 10
     candidates = []
-    for address, mask in local_interfaces():
-        try:
-            network = ipaddress.IPv4Network(f"{address}/{mask}", strict=False)
-            broadcast = str(network.broadcast_address)
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+    receivers = []
+    try:
+        for address, mask in local_interfaces(deadline=deadline):
+            udp = None
+            try:
+                remaining_timeout(deadline, 1.2)
+                network = ipaddress.IPv4Network(f"{address}/{mask}", strict=False)
+                broadcast = str(network.broadcast_address)
+                udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 udp.bind((address, 0))
-                udp.settimeout(1.2)
-                udp.sendto(b"PHONE_BRIDGE_DISCOVER_V1", (broadcast, 8769))
-                deadline = time.monotonic() + 1.2
-                while time.monotonic() < deadline:
-                    try:
-                        payload, peer = udp.recvfrom(128)
-                    except socket.timeout:
-                        break
+                udp.setblocking(False)
+                udp.sendto(b"PHONE_BRIDGE_DISCOVER_V1", (broadcast, DISCOVERY_PORT))
+                receivers.append(udp)
+            except (OSError, ValueError):
+                if udp is not None:
+                    udp.close()
+                continue
+        # All interfaces share one response window, leaving time to verify a real phone reply.
+        broadcast_deadline = min(deadline, time.monotonic() + 1.2)
+        while receivers and time.monotonic() < broadcast_deadline:
+            ready, _, _ = select.select(receivers, [], [], remaining_timeout(broadcast_deadline, 1.2))
+            if not ready:
+                break
+            for udp in ready:
+                try:
+                    payload, peer = udp.recvfrom(128)
                     if payload == b"PHONE_BRIDGE_V1:8767":
                         candidates.append("http://" + peer[0] + ":8767")
-        except (OSError, ValueError):
-            continue
+                except OSError:
+                    continue
+    finally:
+        for udp in receivers:
+            udp.close()
     for candidate in dict.fromkeys(candidates):
         try:
-            hello = request(candidate, "GET", "/hello", timeout=2)
-            if hello.get("name") not in ("手机直达", "猫叼"):
+            hello = request(candidate, "GET", "/hello", timeout=2, deadline=deadline)
+            if not isinstance(hello, dict) or hello.get("name") not in ("手机直达", "猫叼"):
                 continue
             if token:
                 try:
-                    request(candidate, "GET", "/heartbeat", token, timeout=3)
+                    heartbeat = request(candidate, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
+                    if not isinstance(heartbeat, dict) or heartbeat.get("connected") is not True:
+                        raise RuntimeError("手机未确认连接")
                 except RuntimeError:
                     # Older app versions do not expose /heartbeat; /status still
                     # verifies the paired token and keeps discovery compatible.
-                    request(candidate, "GET", "/status", token, timeout=3)
+                    status = request(candidate, "GET", "/status", token, timeout=3, deadline=deadline)
+                    if not isinstance(status, dict) or not status.get("model"):
+                        raise RuntimeError("手机未确认连接")
             return candidate
         except (OSError, RuntimeError, ValueError):
             continue
     return None
 
 
-def is_reachable(address):
+def is_reachable(address, deadline=None):
     try:
         host, port = target(address)
-        source = source_ip(host)
+        source = source_ip(host, deadline=deadline)
         if not source and not ipaddress.ip_address(host).is_loopback:
             return False
-        with socket.create_connection((host, port), timeout=2,
+        with socket.create_connection((host, port), timeout=remaining_timeout(deadline, 2),
                                       source_address=(source, 0) if source else None):
             return True
     except (OSError, ValueError):
         return False
 
 
-def connection(address, timeout=30):
+def connection(address, timeout=30, deadline=None):
     host, port = target(address)
-    source = source_ip(host)
-    return http.client.HTTPConnection(host, port, timeout=timeout,
+    source = source_ip(host, deadline=deadline)
+    return http.client.HTTPConnection(host, port, timeout=remaining_timeout(deadline, timeout),
                                       source_address=(source, 0) if source else None)
 
 
-def request(address, method, path, token=None, body=None, headers=None, stream=False, timeout=30):
-    conn = connection(address, timeout=timeout)
+def request(address, method, path, token=None, body=None, headers=None, stream=False, timeout=30,
+            deadline=None):
+    conn = connection(address, timeout=timeout, deadline=deadline)
     fields = dict(headers or {})
     if token:
         fields["X-Phone-Token"] = token
@@ -231,16 +351,45 @@ def request(address, method, path, token=None, body=None, headers=None, stream=F
         fields["Content-Type"] = "application/json"
     if isinstance(body, bytes):
         fields["Content-Length"] = str(len(body))
-    conn.request(method, path, body=body, headers=fields)
-    reply = conn.getresponse()
-    if stream:
-        return conn, reply
-    raw = reply.read()
-    conn.close()
-    result = json.loads(raw.decode("utf-8")) if raw else {}
-    if reply.status >= 400:
-        raise RuntimeError(result.get("error", f"手机返回错误 {reply.status}"))
-    return result
+    watchdog = None
+    reply = None
+    keep_open = False
+    try:
+        conn.connect()
+        if deadline is not None:
+            connected_socket = conn.sock
+            connected_socket.settimeout(remaining_timeout(deadline, timeout))
+
+            def abort():
+                try:
+                    connected_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                connected_socket.close()
+
+            watchdog = threading.Timer(remaining_timeout(deadline, 3600), abort)
+            watchdog.daemon = True
+            watchdog.start()
+        conn.request(method, path, body=body, headers=fields)
+        reply = conn.getresponse()
+        if stream:
+            if deadline is not None:
+                raise ValueError("流式传输不使用连接检查的截止时间")
+            keep_open = True
+            return conn, reply
+        raw = reply.read()
+        remaining_timeout(deadline, timeout)
+        result = json.loads(raw.decode("utf-8")) if raw else {}
+        if reply.status >= 400:
+            raise RuntimeError(result.get("error", f"手机返回错误 {reply.status}"))
+        return result
+    finally:
+        if watchdog is not None:
+            watchdog.cancel()
+        if not keep_open:
+            if reply is not None:
+                reply.close()
+            conn.close()
 
 
 def send_clipboard_text(address, token, value):
@@ -257,41 +406,49 @@ def send_clipboard_text(address, token, value):
 
 def receive_phone_file(phone_ip, token):
     conn, reply = request(f"http://{phone_ip}:8767", "GET", "/shared-file", token=token, stream=True)
-    if reply.status >= 400:
-        try:
-            detail = json.loads(reply.read().decode("utf-8")).get("error", "手机文件不可用")
-        finally:
-            conn.close()
-        raise RuntimeError(detail)
-    original = urllib.parse.unquote(reply.getheader("X-Filename", "phone-file"))
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", Path(original).name).strip(" .")[:180] or "phone-file"
-    expected = reply.getheader("Content-Length")
-    expected_size = int(expected) if expected is not None else None
-    PHONE_FILE_INBOX.mkdir(parents=True, exist_ok=True)
-    with FILE_NAME_LOCK:
-        base = Path(name)
-        destination = PHONE_FILE_INBOX / name
-        number = 2
-        while destination.exists() or str(destination) in RESERVED_FILE_NAMES:
-            destination = PHONE_FILE_INBOX / f"{base.stem} ({number}){base.suffix}"
-            number += 1
-        RESERVED_FILE_NAMES.add(str(destination))
-    partial = destination.with_name(destination.name + f".{secrets.token_hex(6)}.partial")
+    destination = partial = None
+    created = False
+    reserved = False
     try:
+        if reply.status >= 400:
+            detail = json.loads(reply.read().decode("utf-8")).get("error", "手机文件不可用")
+            raise RuntimeError(detail)
+        original = urllib.parse.unquote(reply.getheader("X-Filename", "phone-file"))
+        name = safe_filename(original)
+        expected = reply.getheader("Content-Length")
+        expected_size = int(expected) if expected is not None else None
+        if expected_size is not None and expected_size < 0:
+            raise ValueError("手机返回了无效的文件大小")
+        PHONE_FILE_INBOX.mkdir(parents=True, exist_ok=True)
+        with FILE_NAME_LOCK:
+            base = Path(name)
+            destination = PHONE_FILE_INBOX / name
+            number = 2
+            while destination.exists() or str(destination) in RESERVED_FILE_NAMES:
+                destination = PHONE_FILE_INBOX / f"{base.stem} ({number}){base.suffix}"
+                number += 1
+            RESERVED_FILE_NAMES.add(str(destination))
+            reserved = True
+        partial = destination.with_name(destination.name + f".{secrets.token_hex(6)}.partial")
         received = 0
         with partial.open("xb") as file:
+            created = True
             while chunk := reply.read(65536):
                 file.write(chunk)
                 received += len(chunk)
         if expected_size is not None and received != expected_size:
             raise OSError(f"文件传输中断：收到 {received} / {expected_size} 字节")
-        partial.replace(destination)
+        # On Windows rename refuses an existing destination, even if it appeared mid-transfer.
+        partial.rename(destination)
         return destination
     finally:
+        reply.close()
         conn.close()
-        partial.unlink(missing_ok=True)
-        with FILE_NAME_LOCK:
-            RESERVED_FILE_NAMES.discard(str(destination))
+        if created:
+            partial.unlink(missing_ok=True)
+        if reserved:
+            with FILE_NAME_LOCK:
+                RESERVED_FILE_NAMES.discard(str(destination))
 
 
 def listen_for_phone_clipboard():
@@ -405,8 +562,8 @@ def authenticated(args):
         found = discover(token)
         if found:
             address = found
-            saved["address"] = found
-            config_save(saved)
+            if not update_pair_address(token, found):
+                raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
         else:
             raise RuntimeError("手机暂时没有接收连接。请确认手机和电脑在同一 Wi-Fi，并解锁手机打开一次「猫叼」。")
     return address, token
@@ -414,29 +571,49 @@ def authenticated(args):
 
 def save_download(address, token, path, output):
     conn, reply = request(address, "GET", path, token=token, stream=True)
-    if reply.status >= 400:
-        message = json.loads(reply.read().decode("utf-8"))
-        conn.close()
-        raise RuntimeError(message.get("error", "手机下载失败"))
-    suggested = urllib.parse.unquote(reply.getheader("X-Filename", "phone-file"))
-    destination = Path(output or suggested).expanduser().resolve()
-    if destination.exists():
-        conn.close()
-        raise RuntimeError("文件已存在，请指定其他保存路径：" + str(destination))
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination = None
+    created = False
     try:
-        with destination.open("wb") as file:
+        if reply.status >= 400:
+            message = json.loads(reply.read().decode("utf-8"))
+            raise RuntimeError(message.get("error", "手机下载失败"))
+        suggested = safe_filename(urllib.parse.unquote(reply.getheader("X-Filename", "phone-file")))
+        destination = Path(output or suggested).expanduser().resolve()
+        if destination.exists():
+            raise RuntimeError("文件已存在，请指定其他保存路径：" + str(destination))
+        expected = reply.getheader("Content-Length")
+        expected_size = int(expected) if expected is not None else None
+        if expected_size is not None and expected_size < 0:
+            raise ValueError("手机下载返回了无效的文件大小")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        received = 0
+        with destination.open("xb") as file:
+            created = True
             while True:
                 chunk = reply.read(65536)
                 if not chunk:
                     break
                 file.write(chunk)
+                received += len(chunk)
+        if expected_size is not None and received != expected_size:
+            raise OSError(f"文件传输中断：收到 {received} / {expected_size} 字节，请重试")
     except BaseException:
-        destination.unlink(missing_ok=True)
+        if created:
+            destination.unlink(missing_ok=True)
         raise
     finally:
+        reply.close()
         conn.close()
     print("已保存：" + str(destination))
+
+
+def safe_filename(value):
+    name = re.split(r"[/\\]", value)[-1]
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")[:180].rstrip(" .") or "phone-file"
+    if name.split(".", 1)[0].rstrip(" ").upper() in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)],
+                                        *[f"LPT{i}" for i in range(1, 10)]}:
+        name = "_" + name
+    return name
 
 
 def send_file(address, token, filename):
