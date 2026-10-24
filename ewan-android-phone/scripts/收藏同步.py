@@ -391,7 +391,8 @@ def process_one(db, row, client, kb_id):
     if not annotate_or_defer(db, identifier, client, kb_id, note_id):
         return
     IDENTITY_RULES.publish_note(client,kb_id,note_id)
-    if row["url"] and not row["page_id"]:
+    # A user-abandoned web copy is never resubmitted; the link note itself stays.
+    if row["url"] and not row["page_id"] and row["full_text_status"] != "网页未抓取（已放弃）":
         try:
             payload = {"url": row["url"],'process_config':PROCESS}
             if tag_ids:
