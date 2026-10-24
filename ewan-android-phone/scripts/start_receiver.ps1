@@ -46,6 +46,14 @@ if ($listener) {
 }
 $logs = Join-Path $dataHome 'logs'
 New-Item -ItemType Directory -Path $logs -Force | Out-Null
+# Start-Process can only overwrite its log files, so first append the previous run to a history log.
+foreach ($name in @('receiver.log', 'receiver-error.log')) {
+    $current = Join-Path $logs $name
+    if ((Test-Path -LiteralPath $current -PathType Leaf) -and (Get-Item -LiteralPath $current).Length -gt 0) {
+        $history = [IO.File]::Open((Join-Path $logs ($name -replace '\.log$', '-history.log')), 'Append', 'Write')
+        try { $bytes = [IO.File]::ReadAllBytes($current); $history.Write($bytes, 0, $bytes.Length) } finally { $history.Close() }
+    }
+}
 $env:CATDIAO_NEST_HOME = $dataHome
 $env:PYTHONUNBUFFERED = '1'
 $launched = Start-Process -FilePath $python -ArgumentList ('"' + $receiver + '" listen') `
