@@ -1,7 +1,11 @@
 ﻿$ErrorActionPreference = 'Stop'
 
-$dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝'
-$runtime = Join-Path $dataHome 'runtime'
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
+if ($env:CATDIAO_NEST_HOME) { $dataHome = $env:CATDIAO_NEST_HOME }
+elseif ($inRepo) { $dataHome = Join-Path $repoRoot 'data' }
+else { $dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝' }
+if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }
 $python = Join-Path $runtime 'Scripts/python.exe'
 New-Item -ItemType Directory -Path $dataHome -Force | Out-Null
 

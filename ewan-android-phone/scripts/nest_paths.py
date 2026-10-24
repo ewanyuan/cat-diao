@@ -9,7 +9,17 @@ from pathlib import Path
 
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
 OVERRIDE = os.environ.get("CATDIAO_NEST_HOME", "").strip()
-HOME = Path(OVERRIDE).expanduser().resolve() if OVERRIDE else LOCAL_APPDATA / "猫叼小窝"
+# When the skill runs from the cat-diao repository, keep personal data in the
+# repository's git-ignored data/ folder instead of an app-private directory.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_DATA = REPO_ROOT / "data"
+IN_REPO = (REPO_ROOT / ".git").exists() or REPO_DATA.is_dir()
+if OVERRIDE:
+    HOME = Path(OVERRIDE).expanduser().resolve()
+elif IN_REPO:
+    HOME = REPO_DATA
+else:
+    HOME = LOCAL_APPDATA / "猫叼小窝"
 LEGACY_CONFIG = LOCAL_APPDATA / "手机直达"
 
 

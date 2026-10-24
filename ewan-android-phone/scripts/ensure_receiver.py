@@ -58,7 +58,7 @@ if arguments.resolve_home:
     else:
         # First setup has a runtime but no pairing yet. Resolve a file, since
         # MSIX can redirect individual files without redirecting the directory.
-        home = Path(physical_home(nest_paths.HOME / "runtime" / "pyvenv.cfg")).parent.parent
+        home = nest_paths.HOME if nest_paths.IN_REPO else Path(physical_home(nest_paths.HOME / "runtime" / "pyvenv.cfg")).parent.parent
     print(base64.b64encode(str(home).encode("utf-8")).decode("ascii"))
     sys.exit(0)
 
@@ -86,7 +86,7 @@ def ensure_receiver():
         record.write(time.strftime("%Y-%m-%d %H:%M:%S ") + str(nest_paths.HOME) + "\n")
     receiver = Path(__file__).resolve().with_name("收藏同步.py")
     # Reuse venv dependencies while avoiding its Unicode-path executable launcher.
-    dependencies = str(nest_paths.HOME / "runtime" / "Lib" / "site-packages")
+    dependencies = str((nest_paths.REPO_ROOT / ".venv" if nest_paths.IN_REPO else nest_paths.HOME / "runtime") / "Lib" / "site-packages")
     environment["PYTHONPATH"] = dependencies + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
     with (logs / "recovery-receiver.log").open("ab") as output, (logs / "recovery-receiver-error.log").open("ab") as errors:
         process = subprocess.Popen([sys.executable, str(receiver), "listen"], cwd=str(receiver.parent),

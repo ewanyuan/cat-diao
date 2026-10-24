@@ -1,11 +1,16 @@
 ﻿param([switch]$Restart)
 
 $ErrorActionPreference = 'Stop'
-$dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝'
-$python = Join-Path $dataHome 'runtime/Scripts/python.exe'
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
+if ($env:CATDIAO_NEST_HOME) { $dataHome = $env:CATDIAO_NEST_HOME }
+elseif ($inRepo) { $dataHome = Join-Path $repoRoot 'data' }
+else { $dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝' }
+if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }
+$python = Join-Path $runtime 'Scripts/python.exe'
 $receiver = Join-Path $PSScriptRoot '收藏同步.py'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-    throw 'Cat Diao runtime is missing. Run setup.ps1 first.'
+    throw ('Cat Diao runtime is missing at ' + $python + '. Run setup.ps1 first.')
 }
 try {
     $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8793/health' -TimeoutSec 2

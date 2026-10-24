@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import hashlib
 import hmac
 import ipaddress
+import importlib.util
 import json
 import os
 import secrets
@@ -16,6 +17,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
+from uuid import UUID
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -33,7 +35,9 @@ SETTINGS = DATA / "settings.json"
 PAIRING = nest_paths.pairing_file()
 ENV_FILE = nest_paths.env_file()
 PORT = 8793
-KB_NAME = "手机随手收藏"
+KB_NAME = "参考与情报"
+PROCESS = {'summary_enabled':False,'enable_multimodel':False,'graph_enabled':False,
+           'question_generation_config':{'enabled':False}}
 PHONE_CONNECTION_INTERVAL_S = 10
 PHONE_CONNECTION_TIMEOUT_S = 9.5
 PHONE_CONNECTION_STATE = {"state": "not_started", "started_at": 0, "finished_at": 0}
@@ -41,6 +45,81 @@ PHONE_CONNECTION_LOCK = threading.Lock()
 BLUETOOTH_RECEIVER = None
 HEADERS = ["收藏ID", "收藏时间", "来源", "分享文字", "链接", "入库状态", "全文状态", "WeKnora资料ID", "WeKnora网页ID", "AI处理状态", "AI反馈", "反馈时间", "备注"]
 LOCK = threading.RLock()
+IDENTITY_RULES = None
+
+
+def capture_folder(doc):
+    """File share stubs consistently without undoing a user's placement on retry."""
+    current=doc.get('folder_path')or''
+    defaults={'','手机收藏','手机收藏/待核实','手机收藏/待补内容'}
+    if current not in defaults:
+        return current
+    depth=(doc.get('custom_metadata')or{}).get('content_depth')
+    if doc.get('file_type')=='manual' and depth not in {'full_text','transcript','original','original_bundle'}:
+        return '手机收藏/待补内容'
+    return current or '手机收藏'
+
+
+def annotate_capture(client, kb_id, knowledge_id, row):
+    """Use the one shared identity policy; never recreate a durable capture ID."""
+    global IDENTITY_RULES
+    if IDENTITY_RULES is None:
+        path = Path(weknora_api.__file__).resolve().parents[2] / 'ewan-weknora/scripts/material_identity.py'
+        if not path.is_file():
+            raise RuntimeError('收藏身份规则不可用，保留原编号待重试')
+        spec = importlib.util.spec_from_file_location('capture_material_identity', path)
+        IDENTITY_RULES = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(IDENTITY_RULES)
+    kind = 'collection' if row['url'].startswith(('http://','https://')) else 'unclassified'
+    IDENTITY_RULES.classify(client, kb_id, knowledge_id, kind)
+    doc = IDENTITY_RULES.unwrap(client.request('GET','knowledge/'+quote(knowledge_id,safe='')))
+    metadata = dict(doc.get('custom_metadata') or {})
+    if metadata.get('phone_capture_id') not in {None,'',row['id']}:
+        raise RuntimeError('收藏编号与知识原件不一致，未覆盖')
+    existing_depth=metadata.get('content_depth')
+    depth=existing_depth if existing_depth in {'full_text','transcript','original','original_bundle'} else ('share_text' if doc.get('file_type')=='manual' else 'unknown')
+    metadata.update(phone_capture_id=row['id'],source_type='phone_capture',
+                    record_role='capture' if doc.get('file_type')=='manual' else 'web_article',
+                    content_depth=depth)
+    IDENTITY_RULES.validate_storage(metadata)
+    client.request('PUT','knowledge/'+quote(knowledge_id,safe=''),{'custom_metadata':metadata})
+    destination=capture_folder(doc)
+    if (doc.get('folder_path')or'')!=destination:
+        client.request('POST','knowledge/folder',{'kb_id':kb_id,'knowledge_ids':[knowledge_id],'folder_path':destination})
+    saved=IDENTITY_RULES.unwrap(client.request('GET','knowledge/'+quote(knowledge_id,safe='')))
+    if saved.get('custom_metadata')!=metadata or saved.get('metadata')!=doc.get('metadata') or (saved.get('folder_path')or'')!=destination:
+        raise RuntimeError('收藏身份回读不一致，保留原编号')
+
+
+def annotate_or_defer(db, row_id, client, kb_id, knowledge_id):
+    try:
+        row=db.execute('SELECT * FROM captures WHERE id=?',(row_id,)).fetchone()
+        annotate_capture(client, kb_id, knowledge_id, row)
+        return True
+    except Exception:
+        db.execute("UPDATE captures SET status='分类待重试', remark='资料编号已保留；材料身份标注稍后重试' WHERE id=?", (row_id,))
+        db.commit()
+        return False
+
+
+def annotate_page_or_defer(db, row_id, client, kb_id, page_id, url):
+    """Classify recovered pages before allowing parse-only polling."""
+    try:
+        current = client.request('GET', 'knowledge/'+quote(page_id, safe='')).get('data', {})
+        if (current.get('knowledge_base_id') != kb_id or current.get('source') != url
+                or current.get('type') not in {'url', 'file_url'}):
+            raise RuntimeError('网页回执与收藏链接不一致')
+        # Distinct captures can share an article, but its original capture
+        # attribution must remain intact. Unclaimed or same-capture pages
+        # still need classification, including after a lost POST response.
+        capture_id = (current.get('custom_metadata') or {}).get('phone_capture_id')
+        if capture_id not in {None, '', row_id}:
+            return True
+        return annotate_or_defer(db, row_id, client, kb_id, page_id)
+    except Exception:
+        db.execute("UPDATE captures SET status='分类待重试', remark='资料编号已保留；材料身份标注稍后重试' WHERE id=?", (row_id,))
+        db.commit()
+        return False
 
 
 def database():
@@ -71,8 +150,8 @@ def managed_database():
 
 def weknora_client():
     values = weknora_api.read_env_file(str(ENV_FILE)) if ENV_FILE.is_file() else {}
-    base = os.environ.get("WEKNORA_BASE_URL") or values.get("WEKNORA_BASE_URL") or values.get("WEKNORA_HOST") or ""
-    key = os.environ.get("WEKNORA_API_KEY") or values.get("WEKNORA_API_KEY") or values.get("WEKNORA_TOKEN") or ""
+    base = values.get("WEKNORA_BASE_URL") or values.get("WEKNORA_HOST") or os.environ.get("WEKNORA_BASE_URL") or ""
+    key = values.get("WEKNORA_API_KEY") or values.get("WEKNORA_TOKEN") or os.environ.get("WEKNORA_API_KEY") or ""
     return weknora_api.WeKnoraClient(base, key)
 
 
@@ -90,8 +169,50 @@ def payload_id(result):
     return ""
 
 
+def existing_url(client, kb_id, url):
+    """Recover/reuse the same native article without merging capture events."""
+    found=[]
+    for number in range(1,101):
+        batch=client.request('GET',f'knowledge-bases/{kb_id}/knowledge?page={number}&page_size=100').get('data',[])
+        if not isinstance(batch,list):raise RuntimeError('网页列表回读异常')
+        for d in batch:
+            if d.get('type') in {'url','file_url'} and d.get('source')==url and d.get('knowledge_base_id')==kb_id:found.append(d)
+        if len(batch)<100:break
+    else:raise RuntimeError('网页列表超过核对范围')
+    if len(found)>1:raise RuntimeError('相同URL有多个网页原件，暂留待核对')
+    return found[0] if found else None
+
+
+def capture_setting(name):
+    values = weknora_api.read_env_file(str(ENV_FILE)) if ENV_FILE.is_file() else {}
+    return (values.get(name) or os.environ.get(name) or "").strip()
+
+
+def capture_tag_ids():
+    configured = capture_setting("WEKNORA_CAPTURE_TAG_ID")
+    if not configured:
+        return []
+    # Reject a broken source label before submitting an unlabelled capture.
+    return [str(UUID(configured))]
+
+
 def ensure_kb(client):
     DATA.mkdir(parents=True, exist_ok=True)
+    configured = capture_setting("WEKNORA_KB_ID")
+    if configured:
+        kb_id = str(UUID(configured))
+        result = client.request("GET", f"knowledge-bases/{quote(kb_id, safe='')}")
+        base = result.get("data", {}) if isinstance(result, dict) else {}
+        if base.get("id") != kb_id:
+            raise RuntimeError("WeKnora 未确认配置的目标知识库")
+        saved = {"kb_id": kb_id, "kb_name": base.get("name") or KB_NAME}
+        temporary = SETTINGS.with_name(SETTINGS.name + "." + secrets.token_hex(6) + ".tmp")
+        try:
+            temporary.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporary, SETTINGS)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return kb_id
     if SETTINGS.exists():
         saved = json.loads(SETTINGS.read_text(encoding="utf-8"))
         if saved.get("kb_id"):
@@ -105,15 +226,7 @@ def ensure_kb(client):
             kb_id = base["id"]
             break
     else:
-        result = client.request("POST", "knowledge-bases", {
-            "name": KB_NAME,
-            "description": "从手机分享和悬浮按钮收藏的文章链接及分享文字；全文状态以月度台账为准。",
-            "type": "document",
-            "is_temporary": False,
-        })
-        kb_id = payload_id(result)
-        if not kb_id:
-            raise RuntimeError("WeKnora 未返回新知识库 ID")
+        raise RuntimeError('未找到已配置的参考库；保留本机收藏，不自动新建知识库')
     SETTINGS.write_text(json.dumps({"kb_id": kb_id, "kb_name": KB_NAME}, ensure_ascii=False, indent=2), encoding="utf-8")
     return kb_id
 
@@ -235,56 +348,126 @@ def receive(items):
 
 
 def process_one(db, row, client, kb_id):
+    tag_ids = capture_tag_ids()
     identifier = row["id"]
     now = int(time.time())
     db.execute("UPDATE captures SET last_attempt=? WHERE id=?", (now, identifier))
     db.commit()
     note_id = row["note_id"]
     if not note_id:
-        title = (row["shared_text"].splitlines()[0] or row["url"] or "手机收藏")[:90]
+        lines=row['shared_text'].splitlines()
+        title = ((lines[0] if lines else '') or row["url"] or "手机收藏")[:90]
         content = (f"# {title}\n\n收藏时间：{datetime.fromtimestamp(row['created_at']/1000).isoformat(timespec='seconds')}"
                    f"\n来源：{row['source']}\n原始链接：{row['url'] or '无'}\n\n"
                    f"## 分享文字\n{row['shared_text']}\n\n"
                    "说明：本条记录包含手机分享文字和链接。链接页面正文是否成功抓取，请查看月度台账的「全文状态」。")
-        result = client.request("POST", f"knowledge-bases/{quote(kb_id, safe='')}/knowledge/manual",
-                                {"title": title, "content": content, "status": "publish", "channel": "api"})
-        note_id = payload_id(result)
-        if not note_id:
-            raise RuntimeError("WeKnora 未返回资料 ID")
-        db.execute("UPDATE captures SET note_id=?, status='链接与分享文字已提交入库' WHERE id=?", (note_id, identifier))
+        # Recover the actual original after a lost response. A title alone is
+        # never sufficient, and uncertain creation is never blindly repeated.
+        candidates=[]
+        for number in range(1,101):
+            listing=client.request('GET',f'knowledge-bases/{kb_id}/knowledge?page={number}&page_size=100')
+            batch=listing.get('data',[])
+            if not isinstance(batch,list):raise RuntimeError('收藏原件列表格式异常，未创建副本')
+            for d in batch:
+                if d.get('file_type')=='manual' and (d.get('title')==title or d.get('custom_metadata',{}).get('phone_capture_id')==identifier):
+                    actual=client.request('GET','knowledge/'+d['id']).get('data',{})
+                    if actual.get('knowledge_base_id')==kb_id and actual.get('metadata',{}).get('content')==content:
+                        candidates.append(actual['id'])
+            if len(batch)<100:break
+        else:raise RuntimeError('收藏原件列表超过核对范围，未创建副本')
+        if len(candidates)>1:raise RuntimeError('发现多个相同收件原件，保留编号待核对')
+        if candidates:
+            note_id=candidates[0]
+        else:
+            if row['status']=='写入待核对':raise RuntimeError('上次写入没有明确回执，暂未找到原件；保留收件，不重复创建')
+            db.execute("UPDATE captures SET status='写入待核对' WHERE id=?",(identifier,));db.commit()
+            payload = {"title": title, "content": content, "status": "draft", "channel": "api",'process_config':PROCESS}
+            if tag_ids:payload["tag_ids"] = tag_ids
+            result = client.request("POST", f"knowledge-bases/{quote(kb_id, safe='')}/knowledge/manual", payload)
+            note_id = payload_id(result)
+            if not note_id:raise RuntimeError("WeKnora 未返回资料 ID；保留写入意图，不重复创建")
+        db.execute("UPDATE captures SET note_id=?, status='分类待重试' WHERE id=?", (note_id, identifier))
         db.commit()
+    if not annotate_or_defer(db, identifier, client, kb_id, note_id):
+        return
+    IDENTITY_RULES.publish_note(client,kb_id,note_id)
     if row["url"] and not row["page_id"]:
         try:
-            result = client.request("POST", f"knowledge-bases/{quote(kb_id, safe='')}/knowledge/url",
-                                    {"url": row["url"]})
-            page_id = payload_id(result)
-            db.execute("UPDATE captures SET page_id=?, full_text_status='网页抓取已提交，待确认', remark='' WHERE id=?",
+            payload = {"url": row["url"],'process_config':PROCESS}
+            if tag_ids:
+                payload["tag_ids"] = tag_ids
+            existing=existing_url(client,kb_id,row['url'])
+            if not existing:
+                if row['full_text_status']=='网页写入待核对':raise RuntimeError('网页请求结果未确认，保留回执待核对，不重复提交')
+                db.execute("UPDATE captures SET full_text_status='网页写入待核对' WHERE id=?",(identifier,));db.commit()
+                try:
+                    result = client.request("POST", f"knowledge-bases/{quote(kb_id, safe='')}/knowledge/url", payload)
+                except Exception:
+                    existing=existing_url(client,kb_id,row['url'])
+                    if not existing:raise
+            page_id = existing['id'] if existing else payload_id(result)
+            if not page_id:
+                raise RuntimeError('WeKnora 未返回网页资料 ID')
+            db.execute("UPDATE captures SET page_id=?, status='分类待重试', full_text_status='网页抓取已提交，待确认', remark='' WHERE id=?",
                        (page_id, identifier))
+            db.commit()
+            if not annotate_page_or_defer(db, identifier, client, kb_id, page_id, row['url']):
+                return
         except Exception as error:
-            db.execute("UPDATE captures SET full_text_status='待补全文', remark=? WHERE id=?",
+            db.execute("UPDATE captures SET full_text_status=CASE WHEN full_text_status='网页写入待核对' THEN full_text_status ELSE '待补全文' END, remark=? WHERE id=?",
                        (str(error)[:300], identifier))
     else:
+        if row['page_id']:
+            if not annotate_page_or_defer(db, identifier, client, kb_id, row['page_id'], row['url']):
+                return
         db.execute("UPDATE captures SET full_text_status=? WHERE id=?",
                    ("无链接，保留分享文字" if not row["url"] else row["full_text_status"], identifier))
+    db.commit()
+    db.execute("UPDATE captures SET status='链接与分享文字已提交入库', remark=CASE WHEN remark='资料编号已保留；材料身份标注稍后重试' THEN '' ELSE remark END WHERE id=?", (identifier,))
     db.commit()
     with LOCK:
         sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (identifier,)).fetchone())
 
 
+@contextmanager
+def capture_write_lock():
+    DATA.mkdir(parents=True,exist_ok=True)
+    with (DATA/'capture-writer.lock').open('a+b') as file:
+        file.seek(0)
+        if not file.read(1):file.write(b'0');file.flush()
+        file.seek(0)
+        if os.name=='nt':
+            import msvcrt
+            msvcrt.locking(file.fileno(),msvcrt.LK_NBLCK,1)
+        else:
+            import fcntl
+            fcntl.flock(file.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        try:yield
+        finally:
+            file.seek(0)
+            if os.name=='nt':msvcrt.locking(file.fileno(),msvcrt.LK_UNLCK,1)
+            else:fcntl.flock(file.fileno(),fcntl.LOCK_UN)
+
+
 def process_pending():
+    with capture_write_lock():
+        return process_pending_locked()
+
+
+def process_pending_locked():
     # Remote knowledge requests must not hold the local receipt / workbook lock.
     with managed_database() as db:
-        rows = db.execute("SELECT * FROM captures WHERE note_id='' OR (page_id!='' AND full_text_status='网页抓取已提交，待确认') OR status='已到电脑，待入库'").fetchall()
+        rows = db.execute("SELECT * FROM captures WHERE note_id='' OR full_text_status='网页写入待核对' OR (page_id!='' AND full_text_status='网页抓取已提交，待确认') OR status IN ('已到电脑，待入库','分类待重试','入库失败，待重试')").fetchall()
         if not rows:
             return
         client = weknora_client()
         kb_id = ensure_kb(client)
         for row in rows:
-            if row["page_id"] and row["full_text_status"] == "网页抓取已提交，待确认":
+            if row["page_id"] and row["full_text_status"] == "网页抓取已提交，待确认" and row['status'] != '分类待重试':
                 try:
                     result = client.request("GET", f"knowledge/{quote(row['page_id'], safe='')}")
                     page = result.get("data", result) if isinstance(result, dict) else {}
-                    state = str(page.get("status", "")) if isinstance(page, dict) else ""
+                    state = str(page.get("parse_status", "")) if isinstance(page, dict) else ""
                     if state.lower() in ("completed", "success", "processed", "published"):
                         db.execute("UPDATE captures SET full_text_status='全文已解析' WHERE id=?", (row["id"],))
                     elif state.lower() in ("failed", "error"):
@@ -298,8 +481,9 @@ def process_pending():
             try:
                 process_one(db, row, client, kb_id)
             except Exception as error:
-                db.execute("UPDATE captures SET status='入库失败，待重试', remark=? WHERE id=?",
-                           (str(error)[:300], row["id"]))
+                detail=str(error).replace(getattr(client,'api_key','') or '\0','[redacted]')[:300]
+                db.execute("UPDATE captures SET status=CASE WHEN note_id='' AND status='写入待核对' THEN status ELSE '入库失败，待重试' END, remark=? WHERE id=?",
+                           (detail, row["id"]))
                 db.commit()
                 try:
                     with LOCK:
@@ -566,10 +750,10 @@ class ReceiverServer(ThreadingHTTPServer):
 def main():
     global BLUETOOTH_RECEIVER
     parser = argparse.ArgumentParser(description="手机随手收藏接收与入库")
-    parser.add_argument("command", choices=["init", "listen", "sync", "status", "feedback"])
-    parser.add_argument("--id", help="收藏 ID")
+    parser.add_argument("command", choices=["init", "listen", "sync", "status", "feedback", "giveup"])
+    parser.add_argument("--id", help="收藏 ID；giveup 可用逗号分隔多个")
     parser.add_argument("--ai-status", default="已处理", help="AI 处理状态")
-    parser.add_argument("--text", help="AI 的实际反馈内容")
+    parser.add_argument("--text", help="AI 的实际反馈内容；giveup 时为放弃原因")
     args = parser.parse_args()
     with managed_database() as db:
         if args.command == "status":
@@ -587,6 +771,36 @@ def main():
                 parser.error("没有这条收藏 ID")
             sync_ledger(row)
             print("AI 反馈已写入月度台账")
+            return
+        if args.command == "giveup":
+            # Stop retrying the web-page copy of captures whose link note already exists.
+            ids = [item.strip() for item in (args.id or "").split(",") if item.strip()]
+            if not ids:
+                parser.error("giveup 需要 --id（多个用逗号分隔）")
+            reason = (args.text or "网页正文多次写入失败，手动放弃重试").strip()
+            remark = datetime.now().strftime("%Y-%m-%d %H:%M ") + "已放弃网页正文抓取：" + reason
+            retryable = ("网页写入待核对", "网页抓取已提交，待确认", "待补全文")
+            changed = []
+            with capture_write_lock():
+                for capture_id in ids:
+                    row = db.execute("SELECT * FROM captures WHERE id=?", (capture_id,)).fetchone()
+                    if row is None:
+                        print(f"跳过 {capture_id}：没有这条收藏")
+                        continue
+                    if not row["note_id"]:
+                        print(f"跳过 {capture_id}：链接资料还没入库，不能只放弃网页")
+                        continue
+                    if row["full_text_status"] not in retryable:
+                        print(f"跳过 {capture_id}：网页状态是「{row['full_text_status']}」，无需放弃")
+                        continue
+                    db.execute("UPDATE captures SET full_text_status='网页未抓取（已放弃）', remark=? WHERE id=?",
+                               (remark, capture_id))
+                    changed.append(capture_id)
+                db.commit()
+                with LOCK:
+                    for capture_id in changed:
+                        sync_ledger(db.execute("SELECT * FROM captures WHERE id=?", (capture_id,)).fetchone())
+            print(f"已停止重试 {len(changed)} 条网页正文抓取")
             return
     if args.command == "init":
         kb_id = ensure_kb(weknora_client())
