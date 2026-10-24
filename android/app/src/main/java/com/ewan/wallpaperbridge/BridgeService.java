@@ -78,6 +78,56 @@ public class BridgeService extends Service {
     private Thread captureWorker;
     private volatile ComputerConnection computerConnection;
     private volatile ComputerConnection.Attempt captureAttempt;
+    private volatile BluetoothLink bluetooth;
+
+    static boolean bluetoothOnline() {
+        BridgeService service = active;
+        return service != null && service.bluetooth != null && service.bluetooth.online();
+    }
+
+    static String bluetoothState() {
+        BridgeService service = active;
+        return service == null || service.bluetooth == null ? "starting" : service.bluetooth.state();
+    }
+
+    static boolean wifiOnline(Context context) {
+        long seen = context.getSharedPreferences("bridge", MODE_PRIVATE).getLong("wifi_last_seen_at", 0);
+        return seen > 0 && System.currentTimeMillis() - seen < 20000;
+    }
+
+    private void startBluetooth() {
+        if (bluetooth == null) bluetooth = new BluetoothLink(this, new BluetoothLink.Host() {
+            public String token() { return preferences.getString("computer_token", ""); }
+            public boolean wifiOnline() { return BridgeService.wifiOnline(BridgeService.this); }
+            public JSONArray pending() throws Exception {
+                try (CaptureStore store = new CaptureStore(BridgeService.this)) {
+                    JSONArray items = store.pending(20);
+                    CaptureBatch batch = new CaptureBatch();
+                    JSONArray result = new JSONArray();
+                    for (int i = 0; i < items.length(); i++) {
+                        if (!batch.add(items.getJSONObject(i).toString())) break;
+                        result.put(items.getJSONObject(i));
+                    }
+                    return result;
+                }
+            }
+            public void acknowledge(JSONArray ids) throws Exception {
+                try (CaptureStore store = new CaptureStore(BridgeService.this)) { store.acknowledge(ids); }
+                preferences.edit().remove("capture_sync_error")
+                        .putLong("capture_sync_last_success_at", System.currentTimeMillis()).apply();
+            }
+            public void address(String address) {
+                if (!address.equals(preferences.getString("computer_address", ""))) {
+                    preferences.edit().putString("computer_address", address).apply();
+                    ComputerConnection check = computerConnection;
+                    if (check != null) check.request(false);
+                    requestCaptureSync();
+                }
+            }
+            public void changed() { for (Runnable listener : connectionListeners) listener.run(); }
+        });
+        bluetooth.start();
+    }
 
     public static PairingGate.Request pendingPair() { return pairing.pending(); }
 
@@ -100,9 +150,16 @@ public class BridgeService extends Service {
     private synchronized void startConnectionChecks() {
         if (destroyed || active != this || computerConnection != null
                 || preferences.getString("computer_token", "").isEmpty()) return;
-        computerConnection = new ComputerConnection(attempt -> ComputerConnection.probe(
-                preferences.getString("computer_address", ""), 8793,
-                preferences.getString("computer_token", ""), attempt), snapshot -> {
+        computerConnection = new ComputerConnection(attempt -> {
+            try {
+                ComputerConnection.probe(preferences.getString("computer_address", ""), 8793,
+                        preferences.getString("computer_token", ""), attempt);
+                preferences.edit().putLong("wifi_last_seen_at", System.currentTimeMillis()).apply();
+            } catch (Exception error) {
+                preferences.edit().remove("wifi_last_seen_at").apply();
+                if (!bluetoothOnline()) throw error;
+            }
+        }, snapshot -> {
             if (snapshot.phase == ComputerConnection.Phase.CONNECTED) {
                 preferences.edit().putLong("computer_receiver_last_seen_at", snapshot.finishedAt).apply();
                 requestCaptureSync();
@@ -178,6 +235,8 @@ public class BridgeService extends Service {
         BridgeService service = active;
         if (service != null) {
             service.stopConnectionChecks();
+            if (service.bluetooth != null) service.bluetooth.disconnect();
+            service.preferences.edit().remove("wifi_last_seen_at").apply();
             ComputerConnection.Attempt attempt = service.captureAttempt;
             if (attempt != null) attempt.cancel();
             LocalBridgeServer server = service.localServer;
@@ -209,10 +268,12 @@ public class BridgeService extends Service {
         captureWorker = new Thread(this::captureSyncLoop, "phone-capture-sync");
         captureWorker.start();
         startConnectionChecks();
+        startBluetooth();
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         startServer();
+        startBluetooth();
         if (intent != null && ACTION_CHECK_CONNECTION.equals(intent.getAction())) {
             startConnectionChecks();
             ComputerConnection check = computerConnection;
@@ -223,6 +284,7 @@ public class BridgeService extends Service {
 
     @Override public void onDestroy() {
         destroyed = true;
+        if (bluetooth != null) bluetooth.close();
         stopConnectionChecks();
         LocalBridgeServer server = localServer;
         if (server != null) server.close();
@@ -359,6 +421,7 @@ public class BridgeService extends Service {
                 if (destroyed || active != this || !token.equals(preferences.getString("computer_token", ""))) return false;
                 store.acknowledge(accepted);
                 preferences.edit().remove("capture_sync_error")
+                        .putLong("wifi_last_seen_at", System.currentTimeMillis())
                         .putLong("capture_sync_last_success_at", System.currentTimeMillis()).apply();
                 return store.pendingCount() > 0;
             } finally {
@@ -436,7 +499,7 @@ public class BridgeService extends Service {
 
         if (method.equals("GET") && path.equals("/hello")) {
             JSONObject result = new JSONObject().put("name", "猫叼")
-                    .put("version", "1.13").put("paired", !preferences.getString("computer_token", "").isEmpty())
+                    .put("version", "1.14").put("paired", !preferences.getString("computer_token", "").isEmpty())
                     .put("setup_complete", setupComplete())
                     .put("model", Build.MODEL);
             json(output, 200, result); return;
@@ -667,6 +730,8 @@ public class BridgeService extends Service {
                 .put("computer_retry_started_at", check.attemptStartedAt)
                 .put("computer_retry_remaining_ms", check.remainingMs())
                 .put("computer_address", preferences.getString("computer_address", ""))
+                .put("connection_transport", wifiOnline(this) ? "wifi" : bluetoothOnline() ? "bluetooth" : "offline")
+                .put("bluetooth_state", bluetoothState())
                 .put("shared_file_selected", !preferences.getString("shared_uri", "").isEmpty());
     }
 

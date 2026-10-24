@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
     private TextView connectionTitle;
     private TextView connectionSteps;
     private Button connectionRetry;
+    private Button connectionBluetooth;
     private LinearLayout controlPanel;
     private TextView controlStatus;
     private LinearLayout recentPanel;
@@ -150,6 +151,11 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == 14) {
+            if (BluetoothLink.permission(this)) openBluetoothSettings();
+            else Toast.makeText(this, "蓝牙未开启，仍可通过 Wi-Fi 连接", Toast.LENGTH_LONG).show();
+            return;
+        }
         if (requestCode == 1 && (results.length == 0 || results[0] != PackageManager.PERMISSION_GRANTED)) {
             Toast.makeText(this, "允许局域网访问后，猫叼才能找到小窝", Toast.LENGTH_LONG).show();
         }
@@ -222,7 +228,7 @@ public class MainActivity extends Activity {
         connectionSteps = label("", 14, MUTED, false);
         connectionSteps.setPadding(0, dp(8), 0, dp(8));
         connectionPanel.addView(connectionSteps);
-        connectionRetry = button("重新检查（最多 10 秒）", false);
+        connectionRetry = button("再试一次", false);
         connectionPanel.addView(connectionRetry);
         connectionRetry.setOnClickListener(v -> {
             try {
@@ -232,7 +238,10 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "连接检查未能启动，请重新打开猫叼。", Toast.LENGTH_LONG).show();
             }
         });
-        connectionPanel.addView(label("查看连接地址与详细步骤  ›", 13, CORAL_DARK, true));
+        connectionBluetooth = button("用蓝牙连接", false);
+        connectionBluetooth.setOnClickListener(v -> setupBluetooth());
+        connectionPanel.addView(connectionBluetooth);
+        connectionPanel.addView(label("连接设置  ›", 13, CORAL_DARK, true));
         connectionPanel.setOnClickListener(v -> showDeviceInfo());
 
         controlPanel = panel(PAPER, BORDER);
@@ -272,7 +281,7 @@ public class MainActivity extends Activity {
                 summaryDetail.setText("看到喜欢的内容，分享给猫叼就行。");
             } else if (pending > 0) {
                 summary.setText(pending + " 条待叼回小窝");
-                summaryDetail.setText("收藏还在手机里。按下方步骤连接电脑后会自动补送。");
+                summaryDetail.setText("已保存在手机，连上小窝后自动送达。");
             } else {
                 summary.setText("都叼回小窝了");
                 summaryDetail.setText("共收藏 " + total + " 条。");
@@ -287,38 +296,38 @@ public class MainActivity extends Activity {
         boolean online = computerOnline();
         ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
         boolean checking = check.phase == ComputerConnection.Phase.CHECKING && BridgeService.isRunning();
+        boolean bluetoothOnly = BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(this);
         connectionRetry.setVisibility(trusted.isEmpty() || online ? View.GONE : View.VISIBLE);
         connectionRetry.setEnabled(!checking);
-        connectionRetry.setText(checking ? "正在检查…" : "重新检查（最多 10 秒）");
+        connectionRetry.setText(checking ? "正在找小窝…" : "再试一次");
+        connectionBluetooth.setVisibility(!trusted.isEmpty() && !online ? View.VISIBLE : View.GONE);
         computerStatus.setText(computerConnectionText(trusted));
         computerStatus.setTextColor(trusted.isEmpty() ? MUTED : online ? MINT : CORAL_DARK);
         computerStatus.setVisibility(View.VISIBLE);
         if (trusted.isEmpty()) {
-            connectionTitle.setText("先连接电脑，收藏才能送达");
-            connectionSteps.setText("1. 电脑和手机连接同一 Wi-Fi。\n2. 电脑首次使用？点这里查看电脑端安装说明。\n3. 安装好后，在电脑上的 AI 工具（如 Codex）里说「连接猫叼」，手机点「允许」。");
+            connectionTitle.setText("把电脑连成你的小窝");
+            connectionSteps.setText("首次连接时，两台设备连同一个 Wi-Fi。\n在电脑上说「连接猫叼」，再在手机点「允许」。");
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (!online) {
             if (checking) {
                 long seconds = (check.remainingMs() + 999) / 1000;
-                connectionTitle.setText("正在连接电脑 · 剩余 " + seconds + " 秒");
-                connectionSteps.setText("本次正在等待电脑接收程序确认，最多 10 秒。连上后，待送达的收藏会自动补送。");
+                connectionTitle.setText("正在找小窝 · " + seconds + " 秒");
+                connectionSteps.setText("收藏已保存在手机，连上后会自动送达。");
             } else {
-                connectionTitle.setText(!BridgeService.isRunning() ? "手机连接服务已停止" :
-                        check.phase == ComputerConnection.Phase.FAILED
-                        ? "本次未连上电脑" : "电脑尚未连接");
-                String detail = check.error.isEmpty() ? "还没有收到电脑接收程序的连接确认。" : check.error;
-                String finished = check.finishedAt == 0 ? "" : "\n检查结束：" +
-                        new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-                                .format(new java.util.Date(check.finishedAt)) + "。";
-                connectionSteps.setText(!BridgeService.isRunning() ? "请重新打开猫叼，再检查连接。" :
-                        detail + finished + "\n请确认电脑端「猫叼接收」已开启，两台设备连在可互访的同一 Wi-Fi。后台会每 10 秒再试；连上后收藏会自动补送。");
+                connectionTitle.setText("还没找到小窝");
+                connectionSteps.setText(!BridgeService.isRunning() ? "重新打开猫叼，再试一次。收藏还在手机里。" :
+                        "确认电脑上的猫叼接收已开启。换了网络？可以用蓝牙找回连接。");
             }
+            connectionPanel.setVisibility(View.VISIBLE);
+        } else if (bluetoothOnly) {
+            connectionTitle.setText("已通过蓝牙连接");
+            connectionSteps.setText("收藏会自动送达。传文件或剪贴板文字时，请连同一个 Wi-Fi。");
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (pending > 0) {
             String syncError = getSharedPreferences("bridge", MODE_PRIVATE).getString("capture_sync_error", "");
-            connectionTitle.setText(syncError.isEmpty() ? "电脑已连接，收藏正在补送" : "收藏暂未送达");
-            connectionSteps.setText(syncError.isEmpty() ? "猫叼正把手机里待送达的收藏自动补送到电脑。"
-                    : syncError + "\n收藏仍保存在手机，猫叼会继续尝试送达。");
+            connectionTitle.setText(syncError.isEmpty() ? "正在送到小窝" : "收藏还在手机里");
+            connectionSteps.setText(syncError.isEmpty() ? "稍等一下，正在补送收藏。"
+                    : "这次还没送达，猫叼会自动再试。");
             connectionPanel.setVisibility(View.VISIBLE);
         } else {
             connectionPanel.setVisibility(View.GONE);
@@ -331,22 +340,18 @@ public class MainActivity extends Activity {
     }
 
     private boolean computerOnline() {
-        if (!BridgeService.isRunning()) return false;
-        ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
-        long age = System.currentTimeMillis() - check.finishedAt;
-        return check.phase == ComputerConnection.Phase.CONNECTED && age >= 0 &&
-                age <= BridgeService.COMPUTER_ONLINE_WINDOW_MS;
+        return BridgeService.bluetoothOnline() || BridgeService.isRunning() && BridgeService.wifiOnline(this);
     }
 
     private String computerConnectionText(String trusted) {
         if (trusted.isEmpty()) return "还未与电脑配对";
         if (!BridgeService.isRunning()) return "手机连接服务已停止，请重新打开猫叼。";
-        if (computerOnline()) return "已连接电脑：" + trusted;
+        if (computerOnline()) return (BridgeService.wifiOnline(this) ? "Wi-Fi 已连接 · " : "蓝牙已连接 · ") + trusted;
         ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
         if (check.phase == ComputerConnection.Phase.CHECKING) {
-            return "已配对：" + trusted + " · 正在检查连接（最多 10 秒）";
+            return "正在找小窝 · " + trusted;
         }
-        return "已配对：" + trusted + " · 未连接";
+        return "小窝暂未连接 · " + trusted;
     }
 
     private void renderRecent(JSONArray items) {
@@ -425,12 +430,14 @@ public class MainActivity extends Activity {
                 ? "关闭悬浮猫" : "开启悬浮猫");
         menu.getMenu().add(Menu.NONE, 3, 3, "小窝连接");
         menu.getMenu().add(Menu.NONE, 4, 4, "使用指南");
+        menu.getMenu().add(Menu.NONE, 5, 5, "蓝牙连接");
         menu.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showTransfer();
             else if (item.getItemId() == 2) toggleOverlay();
             else if (item.getItemId() == 3) showDeviceInfo();
             else if (item.getItemId() == 4)
                 startActivity(new Intent(this, OnboardingActivity.class));
+            else if (item.getItemId() == 5) setupBluetooth();
             return true;
         });
         menu.show();
@@ -589,9 +596,17 @@ public class MainActivity extends Activity {
         body.addView(computer);
         TextView instructions = label(trusted.isEmpty()
                 ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 ewan-android-phone 电脑端，完成首次配置，再连接猫叼」。手机出现请求后点「允许」。"
-                : "手机每次检查连接最多 10 秒，首页会显示成功或未连接；点「重新检查」可立即再试。电脑端「猫叼接收」需要保持运行，两台设备需在可互访的同一 Wi-Fi。恢复后收藏会自动补送，无需重新配对。若持续离线，可让电脑上的 AI 工具（如 Codex）说「重新连接猫叼」，并提供这里的连接地址。", 14, INK, false);
+                : "换了网络也不用重新配对。打开电脑上的猫叼接收，手机会自动再试。开启蓝牙备用连接后，可以自动找回地址，也能补送收藏。", 14, INK, false);
         instructions.setPadding(0, dp(12), 0, dp(8));
         body.addView(instructions);
+        Button bluetoothButton = button(BridgeService.bluetoothOnline() ? "查看蓝牙连接" : "设置蓝牙备用连接", false);
+        bluetoothButton.setOnClickListener(v -> setupBluetooth());
+        body.addView(bluetoothButton);
+        String bluetoothHelp = BridgeService.bluetoothOnline() ? "蓝牙已连接，收藏可以送达。" :
+                "permission_needed".equals(BridgeService.bluetoothState()) ? "允许「附近设备」后即可使用蓝牙。" :
+                "disabled".equals(BridgeService.bluetoothState()) ? "请打开手机蓝牙。" :
+                "蓝牙首次使用：在系统设置中将手机与电脑配对。";
+        body.addView(label(bluetoothHelp, 12, MUTED, false));
         TextView address = label("连接地址：" + findLocalAddress(), 12, MUTED, false);
         address.setTextIsSelectable(true);
         address.setPadding(0, dp(6), 0, 0);
@@ -625,6 +640,30 @@ public class MainActivity extends Activity {
                 .setView(scroll).setPositiveButton("完成", null).show();
     }
 
+    private void setupBluetooth() {
+        if (BridgeService.trustedName(this).isEmpty()) {
+            Toast.makeText(this, "先连接一次小窝，再开启蓝牙备用连接", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("用蓝牙找回小窝")
+                .setMessage("打开电脑和手机的蓝牙，在系统设置中配对一次。以后换网络时，猫叼会自动找回连接。\n\n蓝牙可以送收藏；文件和剪贴板文字仍通过 Wi-Fi 传送。")
+                .setNegativeButton("稍后", null)
+                .setPositiveButton("去设置", (dialog, which) -> {
+                    if (!BluetoothLink.permission(this)) requestPermissions(
+                            new String[]{android.Manifest.permission.BLUETOOTH_CONNECT}, 14);
+                    else openBluetoothSettings();
+                }).show();
+    }
+
+    private void openBluetoothSettings() {
+        try {
+            startForegroundService(new Intent(this, BridgeService.class));
+            startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
+        } catch (Exception error) {
+            Toast.makeText(this, "请在手机设置中打开蓝牙", Toast.LENGTH_LONG).show();
+        }
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != 29 || resultCode != RESULT_OK || data == null || data.getData() == null) return;
@@ -640,6 +679,10 @@ public class MainActivity extends Activity {
     }
 
     static void sendClipboardToComputer(Activity activity) {
+        if (BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(activity)) {
+            Toast.makeText(activity, "发送到电脑剪贴板需要 Wi-Fi；也可以先收藏这段文字", Toast.LENGTH_LONG).show();
+            return;
+        }
         String address = activity.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_address", "");
         String token = activity.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_token", "");
         if (address.isEmpty() || token.isEmpty()) {
@@ -690,6 +733,10 @@ public class MainActivity extends Activity {
     }
 
     static void sendSelectedFileToComputer(Context context) {
+        if (BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(context)) {
+            Toast.makeText(context, "传文件请让手机和电脑连同一个 Wi-Fi", Toast.LENGTH_LONG).show();
+            return;
+        }
         String address = context.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_address", "");
         String token = context.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_token", "");
         if (address.isEmpty() || token.isEmpty()) {

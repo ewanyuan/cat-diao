@@ -23,6 +23,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 import 手机直达 as phone_bridge
 import nest_paths
 import weknora_client as weknora_api
+from bluetooth_link import BluetoothReceiver
 
 
 ROOT = Path(__file__).resolve().parent.parent / "assets"
@@ -37,6 +38,7 @@ PHONE_CONNECTION_INTERVAL_S = 10
 PHONE_CONNECTION_TIMEOUT_S = 9.5
 PHONE_CONNECTION_STATE = {"state": "not_started", "started_at": 0, "finished_at": 0}
 PHONE_CONNECTION_LOCK = threading.Lock()
+BLUETOOTH_RECEIVER = None
 HEADERS = ["收藏ID", "收藏时间", "来源", "分享文字", "链接", "入库状态", "全文状态", "WeKnora资料ID", "WeKnora网页ID", "AI处理状态", "AI反馈", "反馈时间", "备注"]
 LOCK = threading.RLock()
 
@@ -446,13 +448,14 @@ class Receiver(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health" and self.client_address[0] in ("127.0.0.1", "::1"):
-            return self.respond(200, {"service": "catdiao-nest", "version": "1.13",
-                                      "phone_connection": phone_connection_state()})
+            return self.respond(200, {"service": "catdiao-nest", "version": "1.14",
+                                      "phone_connection": phone_connection_state(),
+                                      "bluetooth_connection": BLUETOOTH_RECEIVER.snapshot() if BLUETOOTH_RECEIVER else {"state": "not_started"}})
         if urlsplit(self.path).path == "/connection-check":
             return self.check_connection()
         if self.path not in ("/phone-bridge.apk", "/cat-diao.apk") or not same_lan(self.client_address[0]):
             return self.respond(404, {"error": "未找到"})
-        apk = ROOT / "cat-diao-android-1.13.apk"
+        apk = ROOT / "cat-diao-android-1.14.apk"
         if not apk.is_file():
             return self.respond(404, {"error": "安装包尚未生成"})
         self.send_response(200)
@@ -561,6 +564,7 @@ class ReceiverServer(ThreadingHTTPServer):
 
 
 def main():
+    global BLUETOOTH_RECEIVER
     parser = argparse.ArgumentParser(description="手机随手收藏接收与入库")
     parser.add_argument("command", choices=["init", "listen", "sync", "status", "feedback"])
     parser.add_argument("--id", help="收藏 ID")
@@ -611,11 +615,17 @@ def main():
             time.sleep(max(0.05, PHONE_CONNECTION_INTERVAL_S - (time.monotonic() - started)))
 
     server = ReceiverServer(("0.0.0.0", PORT), Receiver)
+    BLUETOOTH_RECEIVER = BluetoothReceiver(phone_bridge, receive)
+    BLUETOOTH_RECEIVER.thread.start()
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=phone_connection_worker, daemon=True,
                      name="catdiao-phone-connection").start()
     print(f"手机收藏接收已开启，端口 {PORT}", flush=True)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        BLUETOOTH_RECEIVER.close()
+        server.server_close()
 
 
 if __name__ == "__main__":
