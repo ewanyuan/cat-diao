@@ -2,6 +2,7 @@
 from datetime import datetime, timezone, timedelta
 import copy
 import json
+import os
 from pathlib import Path
 import re
 from urllib.parse import quote, urlsplit
@@ -18,8 +19,17 @@ KINDS = {
  'artifact_original': '成果原件',
  'discussion_draft': '讨论草案',
 }
-PERSONAL_KB = 'ddeb2794-5fe1-449f-a765-d7a06f0cb855'
-REFERENCE_KB = '6c2b156d-8f02-49cc-9b7f-2df79d12dc21'
+def personal_kb():
+    """Owner's personal knowledge base, only when configured outside the repo."""
+    return (os.environ.get('WEKNORA_PERSONAL_KB_ID') or '').strip()
+
+def reference_kb():
+    """Capture knowledge base, only when configured outside the repo."""
+    return (os.environ.get('WEKNORA_KB_ID') or '').strip()
+
+def known_kbs():
+    return {value for value in (personal_kb(), reference_kb()) if value}
+
 ALIASES = {'collection':'external_reference','personal_experience':'practice_record',
            'personal_artifact':'practice_record'}
 PROCESS = {'summary_enabled':False,'enable_multimodel':False,'graph_enabled':False,
@@ -156,7 +166,7 @@ def storage_patch(kind,provenance=None,existing=None):
 
 def target_identity(kb, kind, document=None):
     """Public legacy aliases remain accepted; the new KB stores its shared ontology."""
-    if kb not in {PERSONAL_KB,REFERENCE_KB}:
+    if kb not in known_kbs():
         return kind, None
     stored = ALIASES.get(kind,kind)
     role = {'collection':'capture','personal_experience':'practice','personal_artifact':'artifact_index'}.get(kind)
@@ -166,9 +176,9 @@ def target_identity(kb, kind, document=None):
               'artifact_original':'artifact_original','discussion_draft':'discussion_draft'}.get(kind)
     if kind=='personal_artifact' and document and document.get('file_type') not in {'manual',None}:
         stored,role='artifact_original','artifact_original'
-    if kb==REFERENCE_KB and stored not in {'external_reference','discussion_draft','unclassified'}:
+    if reference_kb() and kb==reference_kb() and stored not in {'external_reference','discussion_draft','unclassified'}:
         raise ClassificationError('本人陈述、实践或成果应放入「知识与实践」，未写入参考库。')
-    if kb==PERSONAL_KB and stored=='external_reference':
+    if personal_kb() and kb==personal_kb() and stored=='external_reference':
         raise ClassificationError('外部收藏应放入「参考与情报」，未写入主库。')
     return stored,role
 
@@ -176,7 +186,7 @@ def target_identity(kb, kind, document=None):
 def target_patch(kb,kind,provenance=None,existing=None,document=None):
     stored,role=target_identity(kb,kind,document)
     patch=storage_patch(kind,provenance,existing)
-    if kb in {PERSONAL_KB,REFERENCE_KB}:
+    if kb in known_kbs():
         patch.update(material_kind=stored,identity_kind=kind)
         old_role=(existing or {}).get('record_role')
         if role and (not old_role or kind in {'personal_experience','personal_artifact'}):patch['record_role']=role
@@ -191,7 +201,7 @@ def target_patch(kb,kind,provenance=None,existing=None,document=None):
 def identity_labels(kb,kind,document=None):
     stored,role=target_identity(kb,kind,document)
     labels={'身份:'+KINDS[kind]}
-    if kb in {PERSONAL_KB,REFERENCE_KB}:
+    if kb in known_kbs():
         labels.add('身份:'+KINDS[stored])
         if stored=='practice_record' and (role=='artifact_index' or (document or {}).get('custom_metadata',{}).get('record_role')=='artifact_index'):
             labels.add('身份:'+KINDS['personal_artifact'])
@@ -286,7 +296,7 @@ def create_note(client,kb,title,content,kind,provenance=None,tags=None,draft=Fal
     ids=resolve_tags(client,kb,[selected_identity_label(kb,kind),*(tags or [])])
     created=unwrap(client.request('POST',f'knowledge-bases/{quote(kb,safe="")}/knowledge/manual',
                    {'title':title,'content':content,'status':'draft','tag_ids':ids,'channel':'api',
-                    **({'process_config':PROCESS} if kb in {PERSONAL_KB,REFERENCE_KB} else {})}))
+                    **({'process_config':PROCESS} if kb in known_kbs() else {})}))
     ident=created.get('id')
     if not ident:raise ClassificationError('保存未返回条目编号，停止重试并核对知识库。')
     try:
@@ -321,7 +331,7 @@ def publish_note(client,kb,ident):
     if latest.get('knowledge_base_id')!=kb or latest.get('title')!=first.get('title') or latest.get('metadata')!=manual or latest.get('custom_metadata')!=meta or set(tag_ids(latest))!=set(tag_ids(first)):
         raise ClassificationError('笔记在核对期间发生变化，未覆盖发布。')
     client.request('PUT','knowledge/manual/'+quote(ident,safe=''),{'title':first['title'],'content':manual['content'],'status':'publish','tag_ids':tag_ids(latest),
-                   **({'process_config':PROCESS} if kb in {PERSONAL_KB,REFERENCE_KB} else {})})
+                   **({'process_config':PROCESS} if kb in known_kbs() else {})})
     result=unwrap(client.request('GET',path))
     if result.get('parse_status')=='failed' or (result.get('metadata') or {}).get('status')!='publish' or (result.get('metadata') or {}).get('content')!=manual['content'] or result.get('custom_metadata')!=meta or set(tag_ids(result))!=set(tag_ids(first)):
         raise ClassificationError('未确认发布状态；保留原条目 '+ident+'，不要重复创建。')

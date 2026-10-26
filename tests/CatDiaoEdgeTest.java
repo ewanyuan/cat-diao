@@ -182,7 +182,7 @@ public final class CatDiaoEdgeTest {
                 timer.schedule(new TimerTask() { public void run() { attempt.cancel(); } }, 9500);
                 try {
                     ComputerConnection.Reply reply = ComputerConnection.exchange(args[0], Integer.parseInt(args[1]),
-                            "POST", "/captures", "X-Phone-Token", "test-pair-secret", payload, attempt);
+                            "POST", "/captures", "test-pair-secret", payload, attempt);
                     require(reply.code == 200, "real receiver rejected batch: " + reply.code);
                     String accepted = new String(reply.body, StandardCharsets.UTF_8);
                     for (int n = first; n < index; n++) require(accepted.contains("\"edge-" + n + "\""),

@@ -13,7 +13,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from test_connection import TASK_HOME, TOKEN, bridge, collector
+from test_connection import TASK_HOME, TOKEN, bridge, collector, protocol, signed_headers
 
 
 @contextmanager
@@ -34,8 +34,7 @@ def post_capture(server, identifier):
     try:
         body = json.dumps({"items": [{"id": identifier, "created_at": int(time.time() * 1000),
                                       "source": "test", "shared_text": "saved content", "url": ""}]}).encode()
-        connection.request("POST", "/captures", body,
-                           {"X-Phone-Token": TOKEN, "Content-Type": "application/json"})
+        connection.request("POST", "/captures", body, signed_headers("POST", "/captures", body))
         reply = connection.getresponse()
         return reply.status, json.loads(reply.read())
     finally:
@@ -59,7 +58,7 @@ class EdgeChecks(unittest.TestCase):
 
     def test_windows_setup_scripts_keep_utf8_bom_for_chinese_paths(self):
         repository = Path(__file__).resolve().parents[1]
-        for relative in ("ewan-android-phone/scripts/setup.ps1", "tests/run.ps1"):
+        for relative in ("cat-diao/scripts/setup.ps1", "tests/run.ps1"):
             content = (repository / relative).read_bytes()
             self.assertTrue(content.startswith(b"\xef\xbb\xbf"), relative)
             content.decode("utf-8-sig")
@@ -130,11 +129,15 @@ class EdgeChecks(unittest.TestCase):
     def test_download_requires_complete_content_and_preserves_existing_file(self):
         class Files(BaseHTTPRequestHandler):
             def do_GET(self):
+                payload = b"hello"
                 self.send_response(200)
                 self.send_header("Content-Length", "50" if self.path == "/truncated" else "5")
                 self.send_header("X-Filename", "..%2FCON.txt")
+                nonce = self.headers.get("X-CatDiao-Nonce") or ""
+                if nonce and self.path != "/truncated":
+                    self.send_header("X-CatDiao-Sig", protocol.sign_response(TOKEN, nonce, 200, payload))
                 self.end_headers()
-                self.wfile.write(b"hello")
+                self.wfile.write(payload)
                 self.wfile.flush()
                 self.close_connection = True
 
@@ -158,10 +161,14 @@ class EdgeChecks(unittest.TestCase):
     def test_download_creation_race_cannot_delete_someone_elses_file(self):
         class Files(BaseHTTPRequestHandler):
             def do_GET(self):
+                payload = b"hello"
                 self.send_response(200)
                 self.send_header("Content-Length", "5")
+                nonce = self.headers.get("X-CatDiao-Nonce") or ""
+                if nonce:
+                    self.send_header("X-CatDiao-Sig", protocol.sign_response(TOKEN, nonce, 200, payload))
                 self.end_headers()
-                self.wfile.write(b"hello")
+                self.wfile.write(payload)
 
             def log_message(self, *args):
                 pass
@@ -193,11 +200,15 @@ class EdgeChecks(unittest.TestCase):
             truncate = False
 
             def do_GET(self):
+                payload = b"hello"
                 self.send_response(200)
                 self.send_header("Content-Length", "50" if Files.truncate else "5")
                 self.send_header("X-Filename", "inbox.txt")
+                nonce = self.headers.get("X-CatDiao-Nonce") or ""
+                if nonce and not Files.truncate:
+                    self.send_header("X-CatDiao-Sig", protocol.sign_response(TOKEN, nonce, 200, payload))
                 self.end_headers()
-                self.wfile.write(b"hello")
+                self.wfile.write(payload)
                 self.close_connection = True
 
             def log_message(self, *args):
@@ -212,13 +223,13 @@ class EdgeChecks(unittest.TestCase):
                 bridge.receive_phone_file("127.0.0.1", TOKEN)
             self.assertEqual(list(inbox.iterdir()), [])
             Files.truncate = False
-            original_rename = Path.rename
+            original_link = os.link
 
-            def race(path, destination):
+            def race(source, destination, *args, **kwargs):
                 Path(destination).write_bytes(b"another writer")
-                return original_rename(path, destination)
+                return original_link(source, destination)
 
-            with patch.object(Path, "rename", race):
+            with patch.object(os, "link", race):
                 with self.assertRaises(FileExistsError):
                     bridge.receive_phone_file("127.0.0.1", TOKEN)
             self.assertEqual((inbox / "inbox.txt").read_bytes(), b"another writer")
@@ -314,7 +325,9 @@ class EdgeChecks(unittest.TestCase):
         with serving(ObservedReceiver) as server, socket.create_connection(server.server_address, timeout=2) as client:
             body = json.dumps({"items": [{"id": "old-request", "created_at": int(time.time() * 1000),
                                           "source": "test", "shared_text": "old content", "url": ""}]}).encode()
-            header = (f"POST /captures HTTP/1.1\r\nHost: localhost\r\nX-Phone-Token: {TOKEN}\r\n"
+            fields = signed_headers("POST", "/captures", body)
+            header = ("POST /captures HTTP/1.1\r\nHost: localhost\r\n" +
+                      "".join(f"{name}: {value}\r\n" for name, value in fields.items()) +
                       f"Content-Length: {len(body)}\r\n\r\n").encode()
             client.sendall(header)
             self.assertTrue(reading.wait(1))
@@ -355,8 +368,11 @@ class EdgeChecks(unittest.TestCase):
                     return
 
         with serving(FastReceiver) as server, socket.create_connection(server.server_address, timeout=1) as slow:
-            body = (b"POST /captures HTTP/1.1\r\nHost: localhost\r\nX-Phone-Token: " + TOKEN.encode() +
-                    b"\r\nContent-Length: 100\r\n\r\n{")
+            claimed = protocol.sign_headers("POST", "/captures", TOKEN, digest=protocol.body_hash(b"x" * 100))
+            header = ("POST /captures HTTP/1.1\r\nHost: localhost\r\n" +
+                      "".join(f"{name}: {value}\r\n" for name, value in claimed.items()) +
+                      "Content-Length: 100\r\n\r\n{")
+            body = header.encode()
             started = time.monotonic()
             slow.sendall(body)
             self.assertEqual(slow.recv(1000), b"")

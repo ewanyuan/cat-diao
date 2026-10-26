@@ -22,6 +22,9 @@ from uuid import UUID
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+import catdiao_protocol as protocol
+import catdiao_version
+import firewall_rule
 import 手机直达 as phone_bridge
 import nest_paths
 import weknora_client as weknora_api
@@ -34,7 +37,7 @@ DB = DATA / "captures.sqlite3"
 SETTINGS = DATA / "settings.json"
 PAIRING = nest_paths.pairing_file()
 ENV_FILE = nest_paths.env_file()
-PORT = 8793
+PORT = catdiao_version.NEST_PORT
 KB_NAME = "参考与情报"
 PROCESS = {'summary_enabled':False,'enable_multimodel':False,'graph_enabled':False,
            'question_generation_config':{'enabled':False}}
@@ -70,6 +73,10 @@ def annotate_capture(client, kb_id, knowledge_id, row):
         spec = importlib.util.spec_from_file_location('capture_material_identity', path)
         IDENTITY_RULES = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(IDENTITY_RULES)
+    for env_name in ("WEKNORA_KB_ID", "WEKNORA_PERSONAL_KB_ID"):
+        configured = capture_setting(env_name)
+        if configured and not os.environ.get(env_name):
+            os.environ[env_name] = configured
     kind = 'collection' if row['url'].startswith(('http://','https://')) else 'unclassified'
     IDENTITY_RULES.classify(client, kb_id, knowledge_id, kind)
     doc = IDENTITY_RULES.unwrap(client.request('GET','knowledge/'+quote(knowledge_id,safe='')))
@@ -633,14 +640,16 @@ class Receiver(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health" and self.client_address[0] in ("127.0.0.1", "::1"):
-            return self.respond(200, {"service": "catdiao-nest", "version": "1.14",
+            return self.respond(200, {"service": "catdiao-nest", "version": catdiao_version.VERSION,
+                                      "nest": str(nest_paths.HOME),
+                                      "firewall": firewall_rule.live_status(),
                                       "phone_connection": phone_connection_state(),
                                       "bluetooth_connection": BLUETOOTH_RECEIVER.snapshot() if BLUETOOTH_RECEIVER else {"state": "not_started"}})
         if urlsplit(self.path).path == "/connection-check":
             return self.check_connection()
         if self.path not in ("/phone-bridge.apk", "/cat-diao.apk") or not same_lan(self.client_address[0]):
             return self.respond(404, {"error": "未找到"})
-        apk = ROOT / "cat-diao-android-1.14.apk"
+        apk = ROOT / catdiao_version.APK_NAME
         if not apk.is_file():
             return self.respond(404, {"error": "安装包尚未生成"})
         self.send_response(200)
@@ -661,18 +670,12 @@ class Receiver(BaseHTTPRequestHandler):
             return self.respond(403, {"error": "未授权"})
         try:
             token = phone_bridge.config_read().get("token", "")
-            challenge = parse_qs(urlsplit(self.path).query).get("challenge", [""])[0]
-            if not token or len(challenge) != 32 or any(char not in "0123456789abcdef" for char in challenge):
+            verdict = protocol.verify_request("GET", urlsplit(self.path).path, token, b"", self.headers)
+            if not verdict.ok:
                 return self.respond(403, {"error": "未授权"})
-            expected = hmac.new(token.encode("utf-8"), ("request:" + challenge).encode("ascii"),
-                                hashlib.sha256).hexdigest()
-            supplied = self.headers.get("X-CatDiao-Auth", "")
-            if len(supplied) != 64 or any(char not in "0123456789abcdef" for char in supplied) or not hmac.compare_digest(expected, supplied):
-                return self.respond(403, {"error": "未授权"})
-            proof = hmac.new(token.encode("utf-8"), ("response:" + challenge).encode("ascii"),
-                             hashlib.sha256).hexdigest()
-            return self.respond(200, {"service": "catdiao-nest", "connected": True},
-                                {"X-CatDiao-Proof": proof})
+            self._auth_token = token
+            self._auth_nonce = verdict.nonce
+            return self.respond(200, {"service": "catdiao-nest", "connected": True})
         except (OSError, ValueError):
             return self.respond(503, {"error": "连接信息暂时不可用"})
 
@@ -680,13 +683,19 @@ class Receiver(BaseHTTPRequestHandler):
         try:
             saved = phone_bridge.config_read()
             expected = saved.get("token", "")
-            if self.path not in ("/captures", "/clipboard", "/file-ready") or not same_lan(self.client_address[0]) or not expected or not hmac.compare_digest(
-                    self.headers.get("X-Phone-Token", ""), expected):
+            if self.path not in ("/captures", "/clipboard", "/file-ready") or not same_lan(self.client_address[0]):
                 return self.respond(403, {"error": "未授权"})
+            verdict = protocol.verify_request(self.command, self.path, expected, b"", self.headers, check_body=False)
+            if not verdict.ok:
+                return self.respond(403, {"error": "未授权"})
+            self._auth_token = expected
+            self._auth_nonce = verdict.nonce
             length = int(self.headers.get("Content-Length", "0"))
             if length < 1 or length > (700000 if self.path == "/captures" else 262144 if self.path == "/clipboard" else 4096):
                 return self.respond(413, {"error": "请求过大"})
             raw = self.read_payload(length)
+            if protocol.body_hash(raw) != verdict.body_hash:
+                return self.respond(400, {"error": "正文与签名不一致"})
             if phone_bridge.config_read().get("token") != expected:
                 return self.respond(403, {"error": "配对已改变，请重新发送"})
             if self.path == "/file-ready":
@@ -715,6 +724,10 @@ class Receiver(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        nonce = getattr(self, "_auth_nonce", "")
+        token = getattr(self, "_auth_token", "")
+        if nonce and token:
+            self.send_header("X-CatDiao-Sig", protocol.sign_response(token, nonce, code, body))
         for name, value in (headers or {}).items():
             self.send_header(name, value)
         self.end_headers()
@@ -759,6 +772,7 @@ def main():
     with managed_database() as db:
         if args.command == "status":
             print(json.dumps({"rows": db.execute("SELECT count(*) FROM captures").fetchone()[0],
+                              "nest": str(nest_paths.HOME),
                               "kb": json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else None}, ensure_ascii=False))
             return
         if args.command == "feedback":

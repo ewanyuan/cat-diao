@@ -41,6 +41,7 @@ import java.net.NetworkInterface;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
+import java.util.Map;
 
 public class MainActivity extends Activity {
     private static final int CREAM = Color.rgb(250, 247, 241);
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
     private TextView connectionSteps;
     private Button connectionRetry;
     private Button connectionBluetooth;
+    private Button revokeButton;
     private LinearLayout controlPanel;
     private TextView controlStatus;
     private LinearLayout recentPanel;
@@ -243,6 +245,11 @@ public class MainActivity extends Activity {
         connectionPanel.addView(connectionBluetooth);
         connectionPanel.addView(label("连接设置  ›", 13, CORAL_DARK, true));
         connectionPanel.setOnClickListener(v -> showDeviceInfo());
+        revokeButton = button("移除小窝连接", false);
+        LinearLayout.LayoutParams revokeLayout = new LinearLayout.LayoutParams(-1, dp(50));
+        revokeLayout.topMargin = dp(14);
+        page.addView(revokeButton, revokeLayout);
+        revokeButton.setOnClickListener(v -> confirmRevoke());
 
         controlPanel = panel(PAPER, BORDER);
         controlPanel.setVisibility(View.GONE);
@@ -253,11 +260,7 @@ public class MainActivity extends Activity {
         controlStatus = label("", 13, MUTED, false);
         controlStatus.setPadding(0, dp(6), 0, 0);
         controlPanel.addView(controlStatus);
-        controlPanel.setOnClickListener(v -> {
-            resetSetupAttempt();
-            setSetupInProgress(true);
-            advanceSetup();
-        });
+        controlPanel.setOnClickListener(v -> showPermissionGuide());
 
         recentPanel = panel(PAPER, BORDER);
         LinearLayout.LayoutParams recentsLayout = new LinearLayout.LayoutParams(-1, -2);
@@ -297,6 +300,7 @@ public class MainActivity extends Activity {
         ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
         boolean checking = check.phase == ComputerConnection.Phase.CHECKING && BridgeService.isRunning();
         boolean bluetoothOnly = BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(this);
+        revokeButton.setVisibility(trusted.isEmpty() ? View.GONE : View.VISIBLE);
         connectionRetry.setVisibility(trusted.isEmpty() || online ? View.GONE : View.VISIBLE);
         connectionRetry.setEnabled(!checking);
         connectionRetry.setText(checking ? "正在找小窝…" : "再试一次");
@@ -334,7 +338,7 @@ public class MainActivity extends Activity {
         }
         controlPanel.setVisibility(trusted.isEmpty() || ready == 3 ? View.GONE : View.VISIBLE);
         if (!trusted.isEmpty() && ready < 3) {
-            controlStatus.setText("屏幕控制等功能还差 " + (3 - ready) + " 步；收藏仍可同步。点这里继续。");
+            controlStatus.setText(PermissionGuide.SPLIT_INTRO);
         }
         showPairRequest();
     }
@@ -400,10 +404,12 @@ public class MainActivity extends Activity {
         if (request.id.equals(pairDialogId)) return;
         if (pairDialog != null) pairDialog.dismiss();
         pairDialogId = request.id;
+        String confirm = request.confirmCode == null || request.confirmCode.isEmpty()
+                ? "" : "\n\n核对数字：" + request.confirmCode + "\n与电脑上显示的一致，再点「允许」。";
         pairDialog = new AlertDialog.Builder(this)
                 .setTitle("连接小窝？")
-                .setMessage("设备：" + request.name + "\n地址：" + request.address +
-                        "\n允许后，猫叼会带你完成必要的手机设置。")
+                .setMessage("设备：" + request.name + "\n地址：" + request.address + confirm
+                        + "\n\n收藏不需要额外权限。看画面、点画面才需要屏幕控制。")
                 .setNegativeButton("拒绝", (dialog, which) -> BridgeService.decidePair(this, request.id, false))
                 .setPositiveButton("允许", (dialog, which) -> {
                     if (!BridgeService.decidePair(this, request.id, true)) {
@@ -413,11 +419,7 @@ public class MainActivity extends Activity {
                     }
                     BridgeService.requestCaptureSync();
                     mainHandler.post(this::refreshHome);
-                    getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                            .putBoolean("setup_prompted_once", true).apply();
-                    resetSetupAttempt();
-                    setSetupInProgress(true);
-                    mainHandler.postDelayed(this::advanceSetup, 300);
+                    mainHandler.postDelayed(this::showPermissionGuide, 300);
                 })
                 .create();
         pairDialog.show();
@@ -431,6 +433,7 @@ public class MainActivity extends Activity {
         menu.getMenu().add(Menu.NONE, 3, 3, "小窝连接");
         menu.getMenu().add(Menu.NONE, 4, 4, "使用指南");
         menu.getMenu().add(Menu.NONE, 5, 5, "蓝牙连接");
+        menu.getMenu().add(Menu.NONE, 6, 6, "权限与省电");
         menu.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showTransfer();
             else if (item.getItemId() == 2) toggleOverlay();
@@ -438,6 +441,7 @@ public class MainActivity extends Activity {
             else if (item.getItemId() == 4)
                 startActivity(new Intent(this, OnboardingActivity.class));
             else if (item.getItemId() == 5) setupBluetooth();
+            else if (item.getItemId() == 6) showPermissionGuide();
             return true;
         });
         menu.show();
@@ -536,8 +540,15 @@ public class MainActivity extends Activity {
         int step;
         if (!PhoneAccessibilityService.isEnabled(this)) {
             step = 1;
-            instruction = "在系统设置中开启「猫叼屏幕控制」，然后返回猫叼。";
-            settings = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            if (Build.VERSION.SDK_INT >= 33 && !getSharedPreferences("bridge", MODE_PRIVATE)
+                    .getBoolean("restricted_settings_opened", false)) {
+                instruction = PermissionGuide.RESTRICTED_SETTINGS_BODY;
+                settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName()));
+            } else {
+                instruction = "在系统设置中开启「猫叼屏幕控制」，然后返回猫叼。收藏不需要这一步。";
+                settings = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            }
         } else if (!Settings.canDrawOverlays(this)) {
             step = 2;
             instruction = "允许「猫叼」显示在其他应用上层，然后返回猫叼。";
@@ -566,6 +577,10 @@ public class MainActivity extends Activity {
         setupAttemptedStep = step;
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
                 .putInt("setup_attempted_step", step).apply();
+        if (step == 1 && settings.getAction().equals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)) {
+            getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                    .putBoolean("restricted_settings_opened", true).apply();
+        }
         if (step == 2) {
             getSharedPreferences("bridge", MODE_PRIVATE).edit()
                     .putBoolean("overlay_wanted", true).apply();
@@ -578,6 +593,81 @@ public class MainActivity extends Activity {
         } catch (Exception error) {
             setSetupInProgress(false);
             Toast.makeText(this, "无法打开系统设置，请从手机设置里开启猫叼", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void confirmRevoke() {
+        new AlertDialog.Builder(this)
+                .setTitle("移除小窝连接？")
+                .setMessage("这台电脑将不能再连接猫叼。还没送到电脑的收藏仍保存在手机。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("移除", (dialog, which) -> {
+                    BridgeService.revoke(this);
+                    refreshHome();
+                }).show();
+    }
+
+    private void showPermissionGuide() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(22), dp(8), dp(22), dp(8));
+        scroll.addView(body);
+        body.addView(label(PermissionGuide.SPLIT_INTRO, 14, INK, false));
+        Button screen = button("开启屏幕控制", true);
+        screen.setOnClickListener(v -> openScreenControl());
+        body.addView(screen);
+        body.addView(label(PermissionGuide.RESTRICTED_SETTINGS_BODY, 13, MUTED, false));
+        Button overlay = button("悬浮窗（可选）", false);
+        overlay.setOnClickListener(v -> {
+            getSharedPreferences("bridge", MODE_PRIVATE).edit().putBoolean("overlay_wanted", true).apply();
+            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName())));
+        });
+        body.addView(overlay);
+        Button brightness = button("允许调节亮度", false);
+        brightness.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                Uri.parse("package:" + getPackageName()))));
+        body.addView(brightness);
+        body.addView(label(PermissionGuide.BATTERY_BODY, 13, MUTED, false));
+        Button battery = button("加入电池优化白名单", false);
+        battery.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:" + getPackageName())));
+            } catch (Exception error) {
+                Toast.makeText(this, "请到系统设置的电池页面，允许猫叼在后台运行", Toast.LENGTH_LONG).show();
+            }
+        });
+        body.addView(battery);
+        body.addView(label(PermissionGuide.AUTOSTART_BODY, 13, MUTED, false));
+        new AlertDialog.Builder(this).setTitle("权限与省电").setView(scroll)
+                .setPositiveButton("完成", null).show();
+    }
+
+    private void openScreenControl() {
+        if (Build.VERSION.SDK_INT >= 33 && !getSharedPreferences("bridge", MODE_PRIVATE)
+                .getBoolean("restricted_settings_opened", false)) {
+            new AlertDialog.Builder(this)
+                    .setTitle(PermissionGuide.RESTRICTED_SETTINGS_TITLE)
+                    .setMessage(PermissionGuide.RESTRICTED_SETTINGS_BODY)
+                    .setNegativeButton("稍后", null)
+                    .setPositiveButton("打开应用信息", (dialog, which) -> {
+                        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                                .putBoolean("restricted_settings_opened", true).apply();
+                        try {
+                            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:" + getPackageName())));
+                        } catch (Exception error) {
+                            Toast.makeText(this, "请到系统设置里打开猫叼的应用信息", Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+            return;
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        } catch (Exception error) {
+            Toast.makeText(this, "请到系统设置的无障碍里开启「猫叼屏幕控制」", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -595,7 +685,7 @@ public class MainActivity extends Activity {
         computer.setPadding(0, dp(5), 0, 0);
         body.addView(computer);
         TextView instructions = label(trusted.isEmpty()
-                ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 ewan-android-phone 电脑端，完成首次配置，再连接猫叼」。手机出现请求后点「允许」。"
+                ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 cat-diao 电脑端，完成首次配置，再连接猫叼」。手机上的 6 位数字要和电脑一致，再点「允许」。如果两边互相看不到，这个 Wi-Fi 可能不允许设备互访。"
                 : "换了网络也不用重新配对。打开电脑上的猫叼接收，手机会自动再试。开启蓝牙备用连接后，可以自动找回地址，也能补送收藏。", 14, INK, false);
         instructions.setPadding(0, dp(12), 0, dp(8));
         body.addView(instructions);
@@ -627,14 +717,7 @@ public class MainActivity extends Activity {
             TextView disconnect = label("移除小窝连接  ›", 13, MUTED, false);
             disconnect.setPadding(0, dp(8), 0, dp(8));
             body.addView(disconnect);
-            disconnect.setOnClickListener(v -> new AlertDialog.Builder(this)
-                    .setTitle("移除小窝连接？")
-                    .setMessage("这台设备将不能再连接猫叼。未送达的收藏仍保存在手机。")
-                    .setNegativeButton("取消", null)
-                    .setPositiveButton("移除", (dialog, which) -> {
-                        BridgeService.revoke(this);
-                        refreshHome();
-                    }).show());
+            disconnect.setOnClickListener(v -> confirmRevoke());
         }
         new AlertDialog.Builder(this).setTitle("小窝连接")
                 .setView(scroll).setPositiveButton("完成", null).show();
@@ -717,7 +800,11 @@ public class MainActivity extends Activity {
                 connection.setRequestMethod("POST");
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                connection.setRequestProperty("X-Phone-Token", token);
+                RequestAuth.Signed signed = RequestAuth.sign("POST", "/clipboard", token, payload,
+                        System.currentTimeMillis() / 1000L);
+                for (Map.Entry<String, String> field : signed.headers.entrySet()) {
+                    connection.setRequestProperty(field.getKey(), field.getValue());
+                }
                 connection.setFixedLengthStreamingMode(payload.length);
                 try (OutputStream output = connection.getOutputStream()) { output.write(payload); }
                 sent = connection.getResponseCode() == 200;
@@ -753,11 +840,16 @@ public class MainActivity extends Activity {
                 connection.setReadTimeout(3600000);
                 connection.setRequestMethod("POST");
                 connection.setDoOutput(true);
+                byte[] payload = "{}".getBytes(StandardCharsets.UTF_8);
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                connection.setRequestProperty("X-Phone-Token", token);
-                connection.setFixedLengthStreamingMode(2);
+                RequestAuth.Signed signed = RequestAuth.sign("POST", "/file-ready", token, payload,
+                        System.currentTimeMillis() / 1000L);
+                for (Map.Entry<String, String> field : signed.headers.entrySet()) {
+                    connection.setRequestProperty(field.getKey(), field.getValue());
+                }
+                connection.setFixedLengthStreamingMode(payload.length);
                 try (OutputStream output = connection.getOutputStream()) {
-                    output.write("{}".getBytes(StandardCharsets.UTF_8));
+                    output.write(payload);
                 }
                 InputStream stream = connection.getResponseCode() < 400
                         ? connection.getInputStream() : connection.getErrorStream();

@@ -16,12 +16,14 @@ $previousEncoding = $env:PYTHONIOENCODING
 Push-Location $repository
 try {
     New-Item -ItemType Directory -Path $classes -Force | Out-Null
-    $sources = @('ComputerConnection', 'LocalBridgeServer', 'PairingGate', 'CaptureBatch', 'BluetoothWire') |
+    $sources = @('ComputerConnection', 'LocalBridgeServer', 'PairingGate', 'CaptureBatch', 'BluetoothWire',
+        'RequestAuth', 'PairingExchange', 'LanPolicy', 'ReconnectSchedule', 'RoutePolicy', 'PermissionGuide') |
         ForEach-Object { 'android/app/src/main/java/com/ewan/wallpaperbridge/' + $_ + '.java' }
-    $sources += @('tests/ComputerConnectionTest.java', 'tests/CatDiaoEdgeTest.java', 'tests/BluetoothWireTest.java')
+    $sources += @('tests/ComputerConnectionTest.java', 'tests/CatDiaoEdgeTest.java', 'tests/BluetoothWireTest.java',
+        'tests/SecurityPolicyTest.java')
     & $javac -encoding UTF-8 -d $classes @sources
     if ($LASTEXITCODE -ne 0) { throw 'Java checks could not compile.' }
-    foreach ($check in @('CatDiaoEdgeTest', 'ComputerConnectionTest', 'BluetoothWireTest')) {
+    foreach ($check in @('CatDiaoEdgeTest', 'ComputerConnectionTest', 'BluetoothWireTest', 'SecurityPolicyTest')) {
         & $java -cp $classes ('com.ewan.wallpaperbridge.' + $check)
         if ($LASTEXITCODE -ne 0) { throw "Java check failed: $check" }
     }

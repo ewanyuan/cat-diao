@@ -181,8 +181,7 @@ final class LocalBridgeServer implements AutoCloseable {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 try { owned.receive(packet); }
                 catch (SocketTimeoutException ignored) { continue; }
-                if (!isRunning() || (!packet.getAddress().isSiteLocalAddress()
-                        && !packet.getAddress().isLoopbackAddress())) continue;
+                if (!isRunning() || !LanPolicy.allows(packet.getAddress())) continue;
                 String message = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.US_ASCII);
                 if (!message.equals("PHONE_BRIDGE_DISCOVER_V1")) continue;
                 byte[] answer = "PHONE_BRIDGE_V1:8767".getBytes(StandardCharsets.US_ASCII);

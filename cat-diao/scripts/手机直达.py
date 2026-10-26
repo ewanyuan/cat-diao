@@ -3,6 +3,7 @@
 import argparse
 from contextlib import contextmanager
 import ctypes
+import hashlib
 import hmac
 import http.client
 import http.server
@@ -21,6 +22,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
+import catdiao_protocol as protocol
 import nest_paths
 
 
@@ -33,6 +35,7 @@ PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
 RESERVED_FILE_NAMES = set()
 CONFIG_WRITE_LOCK = threading.RLock()
+_REQUEST_NONCE = threading.local()
 
 
 def windows_clipboard_functions():
@@ -344,11 +347,19 @@ def request(address, method, path, token=None, body=None, headers=None, stream=F
             deadline=None):
     conn = connection(address, timeout=timeout, deadline=deadline)
     fields = dict(headers or {})
-    if token:
-        fields["X-Phone-Token"] = token
+    raw_body = b""
     if isinstance(body, dict):
-        body = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        raw_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        body = raw_body
         fields["Content-Type"] = "application/json"
+    elif isinstance(body, bytes):
+        raw_body = body
+    nonce = ""
+    if token:
+        signed = protocol.sign_headers(method, path, token, raw_body)
+        nonce = signed["X-CatDiao-Nonce"]
+        _REQUEST_NONCE.value = nonce
+        fields.update(signed)
     if isinstance(body, bytes):
         fields["Content-Length"] = str(len(body))
     watchdog = None
@@ -378,6 +389,9 @@ def request(address, method, path, token=None, body=None, headers=None, stream=F
             keep_open = True
             return conn, reply
         raw = reply.read()
+        if token and reply.status < 500 and not protocol.verify_response(
+                token, nonce, reply.status, raw, reply.getheader("X-CatDiao-Sig") or ""):
+            raise RuntimeError("对方没有返回有效的配对签名")
         remaining_timeout(deadline, timeout)
         result = json.loads(raw.decode("utf-8")) if raw else {}
         if reply.status >= 400:
@@ -390,6 +404,27 @@ def request(address, method, path, token=None, body=None, headers=None, stream=F
             if reply is not None:
                 reply.close()
             conn.close()
+
+
+def fetch_bytes(address, token, path):
+    """Download one authenticated response, including a screen image."""
+    conn, reply = request(address, "GET", path, token=token, stream=True)
+    try:
+        raw = reply.read()
+        nonce = getattr(_REQUEST_NONCE, "value", "")
+        signature = reply.getheader("X-CatDiao-Sig") or ""
+        if reply.status < 400 and not protocol.verify_response(token, nonce, reply.status, raw, signature):
+            raise RuntimeError("手机没有返回有效的配对签名")
+        if reply.status >= 400:
+            try:
+                detail = json.loads(raw.decode("utf-8")).get("error", "手机没有返回画面")
+            except (UnicodeError, ValueError):
+                detail = "手机没有返回画面"
+            raise RuntimeError(detail)
+        return raw
+    finally:
+        reply.close()
+        conn.close()
 
 
 def send_clipboard_text(address, token, value):
@@ -431,15 +466,23 @@ def receive_phone_file(phone_ip, token):
             reserved = True
         partial = destination.with_name(destination.name + f".{secrets.token_hex(6)}.partial")
         received = 0
+        digest = hashlib.sha256()
         with partial.open("xb") as file:
             created = True
             while chunk := reply.read(65536):
                 file.write(chunk)
+                digest.update(chunk)
                 received += len(chunk)
         if expected_size is not None and received != expected_size:
             raise OSError(f"文件传输中断：收到 {received} / {expected_size} 字节")
-        # On Windows rename refuses an existing destination, even if it appeared mid-transfer.
-        partial.rename(destination)
+        if not protocol.verify_response_digest(
+                token, getattr(_REQUEST_NONCE, "value", ""), reply.status,
+                digest.hexdigest(), reply.getheader("X-CatDiao-Sig") or ""):
+            raise RuntimeError("手机没有返回有效的配对签名")
+        # link refuses an existing destination on Windows and Linux, so a file
+        # that appears mid-transfer is left untouched.
+        os.link(partial, destination)
+        partial.unlink()
         return destination
     finally:
         reply.close()
@@ -470,17 +513,21 @@ def listen_for_phone_clipboard():
                 self.reply(400, "请求长度无效")
                 return
             remote_ip = self.client_address[0]
-            supplied = self.headers.get("X-Phone-Token", "")
             current = config_read().get("token", "")
+            verdict = protocol.verify_request(self.command, self.path, current, b"", self.headers, check_body=False)
             if (self.path not in ("/clipboard", "/file-ready") or source_ip(remote_ip) != computer_ip or
-                    not current or not hmac.compare_digest(supplied, current)):
+                    not verdict.ok):
                 self.reply(403, "连接未获授权")
                 return
+            limit = 4096 if self.path == "/file-ready" else MAX_CLIPBOARD_BYTES
+            if length <= 0 or length > limit:
+                self.reply(413, "请求过大")
+                return
+            raw = self.rfile.read(length)
+            if protocol.body_hash(raw) != verdict.body_hash:
+                self.reply(400, "正文与签名不一致")
+                return
             if self.path == "/file-ready":
-                if length < 0 or length > 4096:
-                    self.reply(413, "文件请求无效")
-                    return
-                self.rfile.read(length)
                 try:
                     destination = receive_phone_file(remote_ip, current)
                 except (OSError, ValueError, RuntimeError) as error:
@@ -492,7 +539,7 @@ def listen_for_phone_clipboard():
                 self.reply(413, "文字不能超过 256 KB")
                 return
             try:
-                body = json.loads(self.rfile.read(length).decode("utf-8"))
+                body = json.loads(raw.decode("utf-8"))
                 value = body.get("text")
                 if not isinstance(value, str) or not value:
                     raise ValueError("没有文字")
@@ -523,7 +570,7 @@ def listen_for_phone_clipboard():
 
 
 def pair(address, computer_name, wait_seconds=0):
-    token = secrets.token_hex(32)
+    private_hex, public_hex = protocol.generate_keypair()
     deadline = time.monotonic() + wait_seconds
     while True:
         try:
@@ -535,16 +582,24 @@ def pair(address, computer_name, wait_seconds=0):
             if time.monotonic() >= deadline:
                 raise
             time.sleep(2)
+    if hello.get("protocol") not in (None, "dh-2048-v1") and hello.get("version", "0") < "2":
+        raise RuntimeError("手机上的猫叼需要升级到 2.0 才能安全配对")
     print(f"找到手机：{hello.get('model', 'Android')}。正在请求手机确认电脑连接。")
-    result = request(address, "POST", "/pair", body={"name": computer_name, "token": token})
+    result = request(address, "POST", "/pair", body={
+        "name": computer_name, "public_key": public_hex, "protocol": "dh-2048-v1"})
+    try:
+        token, code = protocol.derive(private_hex, result.get("public_key", ""))
+    except ValueError as error:
+        raise RuntimeError("手机没有返回可用的配对公钥") from error
     pair_id = result["id"]
-    print("请打开手机上的「猫叼」，在弹出的连接请求中点「允许」。")
+    print(f"请核对手机上的 6 位数字是否为 {code}。一致后再点「允许」。")
+    print("如果两边数字不同，点「拒绝」。这个 Wi-Fi 若禁止设备互访，两边都会一直找不到对方。")
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         state = request(address, "GET", "/pair-status?id=" + urllib.parse.quote(pair_id))["state"]
         if state == "approved":
             config_save({"address": address, "token": token, "name": computer_name})
-            print("手机已确认这台电脑。请在猫叼按引导完成手机设置；全部完成后即可使用电脑控制功能。")
+            print("手机已确认这台电脑。收藏现在就能用。看画面、点画面需要在手机上另行开启屏幕控制。")
             return
         if state != "pending":
             raise RuntimeError("手机未允许本次连接：" + state)
@@ -587,6 +642,7 @@ def save_download(address, token, path, output):
             raise ValueError("手机下载返回了无效的文件大小")
         destination.parent.mkdir(parents=True, exist_ok=True)
         received = 0
+        digest = hashlib.sha256()
         with destination.open("xb") as file:
             created = True
             while True:
@@ -594,9 +650,14 @@ def save_download(address, token, path, output):
                 if not chunk:
                     break
                 file.write(chunk)
+                digest.update(chunk)
                 received += len(chunk)
         if expected_size is not None and received != expected_size:
             raise OSError(f"文件传输中断：收到 {received} / {expected_size} 字节，请重试")
+        if not protocol.verify_response_digest(
+                token, getattr(_REQUEST_NONCE, "value", ""), reply.status,
+                digest.hexdigest(), reply.getheader("X-CatDiao-Sig") or ""):
+            raise RuntimeError("手机没有返回有效的配对签名")
     except BaseException:
         if created:
             destination.unlink(missing_ok=True)
@@ -634,17 +695,26 @@ def send_file(address, token, filename):
     free = status.get("storage_free_bytes")
     if isinstance(free, int) and size > free - 64 * 1024 * 1024:
         raise ValueError("手机剩余空间不足，无法保存此文件")
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(65536), b""):
+            digest.update(chunk)
+    headers = protocol.sign_headers("POST", "/file", token, digest=digest.hexdigest())
+    headers.update({
+        "X-Filename": urllib.parse.quote(path.name, safe=""),
+        "Content-Type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        "Content-Length": str(size),
+    })
     conn = connection(address, timeout=180)
     with path.open("rb") as file:
-        conn.request("POST", "/file", body=file, headers={
-            "X-Phone-Token": token,
-            "X-Filename": urllib.parse.quote(path.name, safe=""),
-            "Content-Type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
-            "Content-Length": str(size),
-        })
+        conn.request("POST", "/file", body=file, headers=headers)
         reply = conn.getresponse()
-        data = json.loads(reply.read().decode("utf-8"))
+        raw = reply.read()
     conn.close()
+    if reply.status < 400 and not protocol.verify_response(
+            token, headers["X-CatDiao-Nonce"], reply.status, raw, reply.getheader("X-CatDiao-Sig") or ""):
+        raise RuntimeError("手机没有返回有效的配对签名")
+    data = json.loads(raw.decode("utf-8"))
     if reply.status >= 400:
         raise RuntimeError(data.get("error", "文件发送失败"))
     print("已发送到手机：" + data["folder"] + "/" + data["saved"])
@@ -654,16 +724,21 @@ def set_wallpaper(address, token, filename):
     path = Path(filename).expanduser().resolve()
     if not path.is_file() or not 0 < path.stat().st_size <= 20 * 1024 * 1024:
         raise ValueError("壁纸图片不存在、为空，或超过 20 MB")
+    image_bytes = path.read_bytes()
+    headers = protocol.sign_headers("POST", "/wallpaper/home", token, image_bytes)
+    headers.update({
+        "Content-Type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        "Content-Length": str(len(image_bytes)),
+    })
     conn = connection(address)
-    with path.open("rb") as image:
-        conn.request("POST", "/wallpaper/home", body=image, headers={
-            "X-Phone-Token": token,
-            "Content-Type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
-            "Content-Length": str(path.stat().st_size),
-        })
-        reply = conn.getresponse()
-        result = json.loads(reply.read().decode("utf-8"))
+    conn.request("POST", "/wallpaper/home", body=image_bytes, headers=headers)
+    reply = conn.getresponse()
+    raw = reply.read()
     conn.close()
+    if reply.status < 400 and not protocol.verify_response(
+            token, headers["X-CatDiao-Nonce"], reply.status, raw, reply.getheader("X-CatDiao-Sig") or ""):
+        raise RuntimeError("手机没有返回有效的配对签名")
+    result = json.loads(raw.decode("utf-8"))
     if reply.status >= 400:
         raise RuntimeError(result.get("error", "设置壁纸失败"))
     if result.get("before") == result.get("after"):

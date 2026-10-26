@@ -5,10 +5,9 @@
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $PSScriptRoot 'nest_home.ps1')
+$dataHome = Resolve-CatDiaoNest -RepoRoot $repoRoot
 $inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
-if ($env:CATDIAO_NEST_HOME) { $dataHome = $env:CATDIAO_NEST_HOME }
-elseif ($inRepo) { $dataHome = Join-Path $repoRoot 'data' }
-else { $dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝' }
 if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }
 $python = Join-Path $runtime 'Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {

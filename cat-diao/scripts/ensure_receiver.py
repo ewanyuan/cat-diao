@@ -19,6 +19,7 @@ if arguments.home_base64:
     if not Path(configured).is_absolute():
         raise ValueError("Receiver data directory must be absolute")
     os.environ["CATDIAO_NEST_HOME"] = configured
+import catdiao_version
 import nest_paths
 
 
@@ -64,7 +65,7 @@ if arguments.resolve_home:
 
 
 def ensure_receiver():
-    connection = http.client.HTTPConnection("127.0.0.1", 8793, timeout=3)
+    connection = http.client.HTTPConnection("127.0.0.1", catdiao_version.NEST_PORT, timeout=3)
     try:
         connection.request("GET", "/health")
         reply = connection.getresponse()
@@ -75,7 +76,7 @@ def ensure_receiver():
     finally:
         connection.close()
     try:
-        with socket.create_connection(("127.0.0.1", 8793), timeout=1):
+        with socket.create_connection(("127.0.0.1", catdiao_version.NEST_PORT), timeout=1):
             return  # Never start a competing listener on an occupied port.
     except OSError:
         pass

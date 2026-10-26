@@ -12,23 +12,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 public final class ComputerConnectionTest {
     private static final String TOKEN = "test-pair-secret";
 
     private static void require(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);
-    }
-
-    private static String proof(String text) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(TOKEN.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        StringBuilder result = new StringBuilder();
-        for (byte value : mac.doFinal(text.getBytes(StandardCharsets.US_ASCII)))
-            result.append(String.format("%02x", value & 255));
-        return result.toString();
     }
 
     private static final class Receiver implements AutoCloseable {
@@ -47,14 +36,22 @@ public final class ComputerConnectionTest {
             server.createContext("/connection-check", exchange -> {
                 try {
                     int number = calls.incrementAndGet();
-                    String challenge = exchange.getRequestURI().getQuery().substring("challenge=".length());
                     if (number == blockCall) { blocked.countDown(); release.await(3, TimeUnit.SECONDS); }
-                    boolean authorized = proof("request:" + challenge).equals(
-                            exchange.getRequestHeaders().getFirst("X-CatDiao-Auth"));
-                    if (authorized) exchange.getResponseHeaders().set("X-CatDiao-Proof",
-                            wrongProof ? "0" : proof("response:" + challenge));
+                    String path = exchange.getRequestURI().getRawPath();
+                    RequestAuth.Verdict verdict = RequestAuth.verify("GET", path, TOKEN, new byte[0], true,
+                            exchange.getRequestHeaders().getFirst("X-CatDiao-Ts"),
+                            exchange.getRequestHeaders().getFirst("X-CatDiao-Nonce"),
+                            exchange.getRequestHeaders().getFirst("X-CatDiao-Body"),
+                            exchange.getRequestHeaders().getFirst("X-CatDiao-Sig"),
+                            System.currentTimeMillis() / 1000L, new RequestAuth.NonceWindow());
                     byte[] body = "{}".getBytes(StandardCharsets.US_ASCII);
-                    exchange.sendResponseHeaders(authorized ? 200 : 403, body.length);
+                    int code = verdict.ok ? 200 : 403;
+                    if (verdict.ok) {
+                        String signature = wrongProof ? "0".repeat(64)
+                                : RequestAuth.signResponse(TOKEN, verdict.nonce, code, body);
+                        exchange.getResponseHeaders().set("X-CatDiao-Sig", signature);
+                    }
+                    exchange.sendResponseHeaders(code, body.length);
                     exchange.getResponseBody().write(body);
                 } catch (Exception error) { throw new java.io.IOException(error); }
                 finally { exchange.close(); }

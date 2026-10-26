@@ -22,11 +22,15 @@ collector.env
 *.xlsx
 *.partial
 
-# Only the reviewed APK is distributed with the skill
+# Only previously reviewed APKs stay in the skill. 2.0 is signed locally.
 *.apk
-!ewan-android-phone/assets/cat-diao-android-1.8.apk
-!ewan-android-phone/assets/cat-diao-android-1.13.apk
-!ewan-android-phone/assets/cat-diao-android-1.14.apk
+!cat-diao/assets/cat-diao-android-1.8.apk
+!cat-diao/assets/cat-diao-android-1.10.apk
+!cat-diao/assets/cat-diao-android-1.11.apk
+!cat-diao/assets/cat-diao-android-1.13.apk
+!cat-diao/assets/cat-diao-android-1.14.apk
+keystore.properties
+/tests/build/
 
 # Personal runtime data lives in data/ (never committed)
 /data/

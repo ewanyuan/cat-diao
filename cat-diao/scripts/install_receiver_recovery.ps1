@@ -3,10 +3,9 @@ $taskName = 'CatDiao Receiver Recovery'
 $entry = Join-Path $PSScriptRoot 'ensure_receiver.py'
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw 'Receiver starter is missing.' }
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $PSScriptRoot 'nest_home.ps1')
+$dataHome = Resolve-CatDiaoNest -RepoRoot $repoRoot
 $inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
-if ($env:CATDIAO_NEST_HOME) { $dataHome = $env:CATDIAO_NEST_HOME }
-elseif ($inRepo) { $dataHome = Join-Path $repoRoot 'data' }
-else { $dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝' }
 if ($inRepo) { $venvPython = Join-Path $repoRoot '.venv/Scripts/python.exe' } else { $venvPython = Join-Path $dataHome 'runtime/Scripts/python.exe' }
 if (-not (Test-Path -LiteralPath $venvPython -PathType Leaf)) { throw 'Cat Diao runtime is missing.' }
 # Windows Task Scheduler can reject the venv launcher under a Unicode path.

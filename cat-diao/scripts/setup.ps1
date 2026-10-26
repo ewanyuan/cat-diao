@@ -1,10 +1,14 @@
-﻿$ErrorActionPreference = 'Stop'
+﻿param([string]$NestDir = '')
+
+$ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
+. (Join-Path $PSScriptRoot 'nest_home.ps1')
+if ($NestDir) { Save-CatDiaoNestDir -NestDir $NestDir }
 if ($env:CATDIAO_NEST_HOME) { $dataHome = $env:CATDIAO_NEST_HOME }
-elseif ($inRepo) { $dataHome = Join-Path $repoRoot 'data' }
-else { $dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝' }
+elseif ($NestDir) { $dataHome = $NestDir }
+else { $dataHome = Resolve-CatDiaoNest -RepoRoot $repoRoot }
+$inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
 if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }
 $python = Join-Path $runtime 'Scripts/python.exe'
 New-Item -ItemType Directory -Path $dataHome -Force | Out-Null
@@ -75,6 +79,12 @@ if (-not (Test-Path -LiteralPath $companionExe -PathType Leaf)) {
     $shortcut.Save()
 }
 
+& $python (Join-Path $PSScriptRoot 'nest_paths.py') --migrate $dataHome
+try {
+    & (Join-Path $PSScriptRoot 'ensure_firewall.ps1')
+} catch {
+    Write-Output ('防火墙规则没有改动：' + $_.Exception.Message)
+}
 & (Join-Path $PSScriptRoot 'start_receiver.ps1') -Restart
 Write-Output ('Cat Diao data: ' + $dataHome)
-Write-Output ('Android APK: ' + (Join-Path (Split-Path -Parent $PSScriptRoot) 'assets/cat-diao-android-1.14.apk'))
+Write-Output '2.0 安装包需要主人在本机签名后生成，仓库里不带 2.0 APK。已跟踪的 1.14 不能当作 2.0 安装。'
