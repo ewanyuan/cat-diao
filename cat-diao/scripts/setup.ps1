@@ -4,9 +4,11 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $PSScriptRoot 'nest_home.ps1')
-if ($NestDir) { Save-CatDiaoNestDir -NestDir $NestDir }
+if ($NestDir) {
+    Save-CatDiaoNestDir -NestDir $NestDir
+    $env:CATDIAO_NEST_HOME = $NestDir
+}
 if ($env:CATDIAO_NEST_HOME) { $dataHome = $env:CATDIAO_NEST_HOME }
-elseif ($NestDir) { $dataHome = $NestDir }
 else { $dataHome = Resolve-CatDiaoNest -RepoRoot $repoRoot }
 $inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
 if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }

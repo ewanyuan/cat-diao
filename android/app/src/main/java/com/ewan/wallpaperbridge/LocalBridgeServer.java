@@ -3,6 +3,7 @@ package com.ewan.wallpaperbridge;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.BindException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -122,16 +123,33 @@ final class LocalBridgeServer implements AutoCloseable {
     synchronized void start() throws IOException {
         if (closed) return;
         if (server == null || server.isClosed()) {
-            ServerSocket opened = new ServerSocket();
-            try {
-                opened.setReuseAddress(true);
-                opened.bind(new InetSocketAddress(port));
-            } catch (IOException error) {
-                opened.close();
-                throw error;
+            BindException occupied = null;
+            ServerSocket opened = null;
+            for (int attempt = 0; attempt < 8; attempt++) {
+                opened = new ServerSocket();
+                try {
+                    opened.setReuseAddress(true);
+                    opened.bind(new InetSocketAddress(port));
+                    occupied = null;
+                    break;
+                } catch (BindException error) {
+                    occupied = error;
+                    opened.close();
+                    opened = null;
+                    try { Thread.sleep(25L * (attempt + 1)); }
+                    catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw error;
+                    }
+                } catch (IOException error) {
+                    opened.close();
+                    throw error;
+                }
             }
-            server = opened;
-            Thread accept = new Thread(() -> accept(opened), "phone-bridge-server");
+            if (occupied != null || opened == null) throw occupied;
+            final ServerSocket bound = opened;
+            server = bound;
+            Thread accept = new Thread(() -> accept(bound), "phone-bridge-server");
             accept.setDaemon(true);
             accept.start();
         }

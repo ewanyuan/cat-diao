@@ -47,6 +47,25 @@ setup 创建 Python 环境、安装 Excel 依赖、设置登录后后台接收�
 
 点按前先取新截图。受系统保护的页面可能无法截图。锁屏不能代替用户解锁。读取或发送电脑剪贴板前须有用户对该内容的明确请求，不在输出中回显敏感文字。
 
+## 用另一份代码跑现有小窝
+
+新检出的 2.0 仓库自带 `.git` 时，如果不另外指定，小窝会落在这份检出自己的 `data/`。要接着用原来的配对和台账，启动前指到现有目录。接收程序不会删除那个目录里的文件。
+
+在新检出里任选一种：
+
+```
+$env:CATDIAO_NEST_HOME = '<现有小窝的完整路径>'
+powershell -NoProfile -ExecutionPolicy Bypass -File <新检出>\cat-diao\scripts\start_receiver.ps1 -Restart
+```
+
+或只做一次，把目录记进 `%USERPROFILE%\.catdiao\config.json`：
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File <新检出>\cat-diao\scripts\setup.ps1 -NestDir '<现有小窝的完整路径>'
+```
+
+`start_receiver.ps1 -NestDir` 同样可以。Python 入口也认 `--nest`。启动后看本机回环上的 `/health` 和 `run.ps1 collector status` 里的 `nest` 是不是这个目录，再让手机重连。
+
 ## 接收与收藏
 
 手机分享的链接、发到电脑的文字和选定文件，由小窝里的 `收藏同步.py listen` 接收。`setup.ps1` 设置登录自启。AI 工具关闭后仍由该后台进程接收。若未运行且端口空闲，可运行 `scripts/start_receiver.ps1`。只运行一个接收程序。

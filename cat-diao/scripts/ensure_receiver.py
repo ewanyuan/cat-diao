@@ -90,7 +90,8 @@ def ensure_receiver():
     dependencies = str((nest_paths.REPO_ROOT / ".venv" if nest_paths.IN_REPO else nest_paths.HOME / "runtime") / "Lib" / "site-packages")
     environment["PYTHONPATH"] = dependencies + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
     with (logs / "recovery-receiver.log").open("ab") as output, (logs / "recovery-receiver-error.log").open("ab") as errors:
-        process = subprocess.Popen([sys.executable, str(receiver), "listen"], cwd=str(receiver.parent),
+        process = subprocess.Popen([sys.executable, str(receiver), "--nest", str(nest_paths.HOME), "listen"],
+                                   cwd=str(receiver.parent),
                                    env=environment, stdin=subprocess.DEVNULL, stdout=output, stderr=errors,
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
     time.sleep(1)

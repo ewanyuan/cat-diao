@@ -244,12 +244,34 @@ def month_path(timestamp_ms):
 
 
 def save_workbook(workbook, path):
-    temporary = path.with_name(path.name + "." + secrets.token_hex(6) + ".tmp")
-    try:
-        workbook.save(temporary)
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
+    """Replace the workbook. Windows may briefly lock the xlsx after the previous close."""
+    last_error = None
+    for attempt in range(8):
+        temporary = path.with_name(path.name + "." + secrets.token_hex(6) + ".tmp")
+        try:
+            workbook.save(temporary)
+            os.replace(temporary, path)
+            return
+        except PermissionError as error:
+            last_error = error
+            time.sleep(0.05 * (attempt + 1))
+        finally:
+            temporary.unlink(missing_ok=True)
+    if last_error is not None:
+        raise last_error
+
+
+def id_locations(sheet):
+    """Row numbers that actually hold an id. Do not trust a short worksheet dimension."""
+    locations = {}
+    highest = 1
+    for (row, column), cell in sheet._cells.items():
+        if column != 1 or row < 2 or cell.value in (None, ""):
+            continue
+        locations[str(cell.value)] = row
+        if row > highest:
+            highest = row
+    return locations, highest
 
 
 def ledger(timestamp_ms):
@@ -292,14 +314,19 @@ def sync_ledgers(rows, skip_locked=False):
             ledger(monthly_rows[0]["created_at"])
             workbook = load_workbook(path)
             sheet = workbook["收藏与反馈"]
-            locations = {sheet.cell(number, 1).value: number for number in range(2, sheet.max_row + 1)}
+            locations, highest = id_locations(sheet)
             changed = False
             for row in monthly_rows:
-                target = locations.get(row["id"], sheet.max_row + 1)
-                feedback = sheet.cell(target, 11).value if target <= sheet.max_row else None
-                ai_status = sheet.cell(target, 10).value if target <= sheet.max_row else None
-                feedback_at = sheet.cell(target, 12).value if target <= sheet.max_row else None
-                user_remark = sheet.cell(target, 13).value if target <= sheet.max_row else None
+                target = locations.get(str(row["id"]))
+                if target is None:
+                    highest += 1
+                    target = highest
+                    feedback = ai_status = feedback_at = user_remark = None
+                else:
+                    feedback = sheet.cell(target, 11).value
+                    ai_status = sheet.cell(target, 10).value
+                    feedback_at = sheet.cell(target, 12).value
+                    user_remark = sheet.cell(target, 13).value
                 remark = str(user_remark or "")
                 if row["remark"] and row["remark"] not in remark.splitlines():
                     remark = (remark + "\n" if remark else "") + row["remark"]
@@ -318,10 +345,10 @@ def sync_ledgers(rows, skip_locked=False):
                     cell.data_type = "s"
                     cell.font = Font(name="Arial", size=10)
                     cell.alignment = Alignment(vertical="top", wrap_text=column in (4, 11, 13))
-                locations[row["id"]] = target
+                locations[str(row["id"])] = target
                 changed = True
             if changed:
-                sheet.auto_filter.ref = f"A1:M{sheet.max_row}"
+                sheet.auto_filter.ref = f"A1:M{max(highest, 1)}"
                 save_workbook(workbook, path)
         except PermissionError:
             if not skip_locked:
@@ -642,7 +669,7 @@ class Receiver(BaseHTTPRequestHandler):
         if self.path == "/health" and self.client_address[0] in ("127.0.0.1", "::1"):
             return self.respond(200, {"service": "catdiao-nest", "version": catdiao_version.VERSION,
                                       "nest": str(nest_paths.HOME),
-                                      "firewall": firewall_rule.live_status(),
+                                      "firewall": firewall_rule.cached_status(),
                                       "phone_connection": phone_connection_state(),
                                       "bluetooth_connection": BLUETOOTH_RECEIVER.snapshot() if BLUETOOTH_RECEIVER else {"state": "not_started"}})
         if urlsplit(self.path).path == "/connection-check":
@@ -764,6 +791,7 @@ class ReceiverServer(ThreadingHTTPServer):
 def main():
     global BLUETOOTH_RECEIVER
     parser = argparse.ArgumentParser(description="手机随手收藏接收与入库")
+    parser.add_argument("--nest", help="猫叼小窝目录。也可用环境变量 CATDIAO_NEST_HOME，或用户配置里的 nest_dir")
     parser.add_argument("command", choices=["init", "listen", "sync", "status", "feedback", "giveup"])
     parser.add_argument("--id", help="收藏 ID；giveup 可用逗号分隔多个")
     parser.add_argument("--ai-status", default="已处理", help="AI 处理状态")
@@ -849,7 +877,7 @@ def main():
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=phone_connection_worker, daemon=True,
                      name="catdiao-phone-connection").start()
-    print(f"手机收藏接收已开启，端口 {PORT}", flush=True)
+    print(f"手机收藏接收已开启，端口 {PORT}，小窝 {nest_paths.HOME}", flush=True)
     try:
         server.serve_forever()
     finally:

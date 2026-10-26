@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 
@@ -22,17 +23,47 @@ LEGACY_CONFIG = LOCAL_APPDATA / "手机直达"
 
 
 def config_file(user_home: Path | None = None) -> Path:
-    return Path(user_home or Path.home()) / ".catdiao" / "config.json"
+    if user_home is not None:
+        home = Path(user_home)
+    else:
+        home = Path(os.environ.get("USERPROFILE") or Path.home())
+    return home / ".catdiao" / "config.json"
+
+
+def config_candidates(user_home: Path | None = None) -> list[Path]:
+    """PowerShell writes %USERPROFILE%\\.catdiao; Python's home can differ."""
+    if user_home is not None:
+        return [config_file(user_home)]
+    paths = []
+    for raw in (os.environ.get("USERPROFILE"), str(Path.home())):
+        if not raw:
+            continue
+        path = Path(raw) / ".catdiao" / "config.json"
+        if path not in paths:
+            paths.append(path)
+    return paths
 
 
 def read_nest_dir(user_home: Path | None = None) -> str:
-    path = config_file(user_home)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ""
-    value = data.get("nest_dir") if isinstance(data, dict) else ""
-    return value.strip() if isinstance(value, str) else ""
+    for path in config_candidates(user_home):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        value = data.get("nest_dir") if isinstance(data, dict) else ""
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def apply_nest_argument(argv: list[str], env: dict | None = None) -> dict:
+    """Honor `python script.py --nest <dir>` before the nest path is snapshotted."""
+    env = os.environ if env is None else env
+    if "--nest" in argv:
+        index = argv.index("--nest")
+        if index + 1 < len(argv) and argv[index + 1].strip():
+            env["CATDIAO_NEST_HOME"] = argv[index + 1]
+    return env
 
 
 def write_nest_dir(dest: Path, user_home: Path | None = None) -> None:
@@ -130,6 +161,7 @@ def migrate_old_config() -> None:
             shutil.copy2(old, target)
 
 
+apply_nest_argument(sys.argv)
 HOME = resolve_home()
 
 

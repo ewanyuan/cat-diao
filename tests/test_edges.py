@@ -299,6 +299,30 @@ class EdgeChecks(unittest.TestCase):
         finally:
             workbook.close()
 
+    def test_ledger_save_retries_a_brief_windows_lock(self):
+        stamp = int(time.time() * 1000)
+        attempts = {"n": 0}
+        original = os.replace
+
+        def flaky(source, destination):
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise PermissionError("locked")
+            return original(source, destination)
+
+        with patch.object(collector.os, "replace", flaky):
+            accepted = collector.receive([{"id": "locked-row", "created_at": stamp, "source": "test",
+                                           "shared_text": "kept", "url": ""}])
+        self.assertEqual(accepted, ["locked-row"])
+        self.assertGreaterEqual(attempts["n"], 3)
+        workbook = collector.load_workbook(collector.month_path(stamp))
+        try:
+            found = [cell.value for (row, column), cell in workbook["收藏与反馈"]._cells.items()
+                     if column == 1 and row >= 2]
+        finally:
+            workbook.close()
+        self.assertEqual(found, ["locked-row"])
+
     def test_failed_ledger_replace_preserves_existing_workbook(self):
         stamp = int(time.time() * 1000)
         item = {"id": "saved", "created_at": stamp, "source": "test", "shared_text": "one", "url": ""}
@@ -402,11 +426,18 @@ class EdgeChecks(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM captures").fetchone()[0], 20)
             self.assertEqual(db.execute("SELECT min(length(shared_text)) FROM captures").fetchone()[0], 30000)
             stamp = db.execute("SELECT created_at FROM captures LIMIT 1").fetchone()[0]
-        workbook = collector.load_workbook(collector.month_path(stamp))
+        with collector.LOCK:
+            collector.refresh_ledgers()
+        path = collector.month_path(stamp)
+        self.assertEqual(path.parent, self.home / "ledger")
+        workbook = collector.load_workbook(path)
         try:
-            self.assertEqual(workbook["收藏与反馈"].max_row, 21)
+            found = [str(cell.value) for (row, column), cell in workbook["收藏与反馈"]._cells.items()
+                     if column == 1 and row >= 2 and cell.value]
         finally:
             workbook.close()
+        self.assertEqual(sorted(found, key=lambda item: int(str(item).split("-")[1])),
+                         [f"edge-{index}" for index in range(20)])
 
 
 if __name__ == "__main__":

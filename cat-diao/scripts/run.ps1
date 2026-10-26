@@ -22,5 +22,5 @@ $script = switch ($CommandArgs[0]) {
     default { throw 'Choose phone or collector.' }
 }
 $env:CATDIAO_NEST_HOME = $dataHome
-& $python $script @($CommandArgs | Select-Object -Skip 1)
+& $python $script --nest $dataHome @($CommandArgs | Select-Object -Skip 1)
 exit $LASTEXITCODE

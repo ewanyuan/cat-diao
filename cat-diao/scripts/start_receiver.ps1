@@ -1,8 +1,15 @@
-﻿param([switch]$Restart)
+﻿param(
+    [switch]$Restart,
+    [string]$NestDir = ''
+)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $PSScriptRoot 'nest_home.ps1')
+if ($NestDir) {
+    Save-CatDiaoNestDir -NestDir $NestDir
+    $env:CATDIAO_NEST_HOME = $NestDir
+}
 $dataHome = Resolve-CatDiaoNest -RepoRoot $repoRoot
 $inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
 if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }
@@ -55,7 +62,7 @@ foreach ($name in @('receiver.log', 'receiver-error.log')) {
 }
 $env:CATDIAO_NEST_HOME = $dataHome
 $env:PYTHONUNBUFFERED = '1'
-$launched = Start-Process -FilePath $python -ArgumentList ('"' + $receiver + '" listen') `
+$launched = Start-Process -FilePath $python -ArgumentList ('"' + $receiver + '" --nest "' + $dataHome + '" listen') `
     -WorkingDirectory $PSScriptRoot -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $logs 'receiver.log') `
     -RedirectStandardError (Join-Path $logs 'receiver-error.log') -PassThru
