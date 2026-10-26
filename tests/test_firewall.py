@@ -26,8 +26,63 @@ class FirewallChecks(unittest.TestCase):
         self.assertEqual(public["state"], "missing")
         self.assertTrue(public["needs_private_profile"])
         self.assertEqual(public["public_networks"], ["Cafe"])
+        self.assertEqual(public["hint"], "")
         wrong = firewall.assess(8793, [], [rule(remote="Any")])
         self.assertEqual(wrong["state"], "missing")
+
+    def test_powershell_51_numeric_profiles_and_public_hint(self):
+        # ConvertTo-Json on Windows PowerShell 5.1 emits enums as numbers,
+        # and a one-item array as a single object.
+        payload = {
+            "profiles": {"Name": "以太网", "NetworkCategory": 0},
+            "rules": {"name": "猫叼小窝", "port": 8793, "profiles": 2,
+                      "remote": "LocalSubnet", "direction": 1, "action": 2, "enabled": True},
+        }
+        parsed = firewall.parse_powershell_json(json.dumps(payload))
+        self.assertEqual(parsed["state"], "ok")
+        self.assertEqual(parsed["rules"], ["猫叼小窝"])
+        self.assertEqual(parsed["public_networks"], ["以太网"])
+        self.assertEqual(parsed["private_networks"], [])
+        self.assertTrue(parsed["needs_private_profile"])
+        self.assertIn("公用", parsed["hint"])
+        self.assertIn("专用", parsed["hint"])
+        self.assertIn("以太网", parsed["hint"])
+
+        private_network = {
+            "profiles": [{"Name": "WLAN", "NetworkCategory": "1"}],
+            "rules": [{"name": "猫叼小窝", "port": 8793, "profiles": ["2"],
+                       "remote": "LocalSubnet", "direction": "Inbound", "action": "Allow", "enabled": True}],
+        }
+        parsed = firewall.parse_powershell_json(json.dumps(private_network, ensure_ascii=False))
+        self.assertEqual(parsed["state"], "ok")
+        self.assertEqual(parsed["private_networks"], ["WLAN"])
+        self.assertEqual(parsed["hint"], "")
+
+        # Connection category 2 is Domain, not the firewall Private bit.
+        domain = {
+            "profiles": [{"Name": "公司", "NetworkCategory": 2}],
+            "rules": [{"name": "猫叼小窝", "port": 8793, "profiles": "Private",
+                       "remote": "LocalSubnet", "direction": "Inbound", "action": "Allow"}],
+        }
+        parsed = firewall.parse_powershell_json(json.dumps(domain, ensure_ascii=False))
+        self.assertEqual(parsed["state"], "ok")
+        self.assertEqual(parsed["private_networks"], [])
+        self.assertEqual(parsed["public_networks"], [])
+        self.assertEqual(parsed["hint"], "")
+
+        # 6 is Private|Public, so a public network is already covered.
+        covered = {
+            "profiles": [{"name": "Cafe", "category": "0"}],
+            "rules": [rule(profiles=[6])],
+        }
+        parsed = firewall.parse_powershell_json(json.dumps(covered))
+        self.assertEqual(parsed["state"], "ok")
+        self.assertEqual(parsed["hint"], "")
+        self.assertFalse(parsed["needs_private_profile"])
+
+        script = firewall.powershell_script()
+        self.assertIn("-band 2", script)
+        self.assertIn("Convert-CatDiaoCategory", script)
 
     def test_gbk_console_bytes_parse_and_netsh_fallback(self):
         payload = {

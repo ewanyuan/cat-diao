@@ -74,7 +74,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <新检出>\cat-diao\scripts
 
 电脑会在网络恢复后续连，间隔从约 10 秒逐渐增加到最多 60 秒。手机开机后会尝试拉起服务。首页「已连接」需要当前配对的电脑接收端确认。
 
-用户说「连接猫叼」或状态持续离线时，先检查本机 `/health`（只在这台电脑的回环地址上）。响应含 `phone_connection`、`nest` 和 `firewall`。接收程序没运行就启动它，再运行 `phone status`。自动发现失败时，让用户从猫叼首页提供当前连接地址。只有手机明确显示未配对时才重新 `pair`。不要把「已配对」或一次失败当作已经连上或安装失败。
+用户说「连接猫叼」或状态持续离线时，先检查本机 `/health`（只在这台电脑的回环地址上）。响应含 `phone_connection`、`nest` 和 `firewall`。`firewall.hint` 有字时，把这句话告诉用户。常见情况是当前网络是公用网络，而规则只对专用网络放行，需要到 Windows 设置里把这块网络改成「专用」。`collector status` 里的 `firewall` 是同一份结果。接收程序没运行就启动它，再运行 `phone status`。自动发现失败时，让用户从猫叼首页提供当前连接地址。只有手机明确显示未配对时才重新 `pair`。不要把「已配对」或一次失败当作已经连上或安装失败。
 
 用户问「刚发的东西在哪」时，用 `collector status` 和当前小窝里的 `收藏台账/` 核对。手机显示「已到小窝」只表示电脑确认收到。收到的文件在小窝的 `手机传来的文件/`。WeKnora 是可选的后续同步：服务地址、专用 API key 和知识库编号只放在该用户小窝的 `collector.env`（`WEKNORA_KB_ID`、`WEKNORA_PERSONAL_KB_ID`、`WEKNORA_CAPTURE_TAG_ID`）。不要把这些值写进技能或仓库。不要把本地收件、网页全文解析与 AI 处理混为一谈。本轮不自动解析文章。
 

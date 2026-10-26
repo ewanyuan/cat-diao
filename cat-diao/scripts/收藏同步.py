@@ -801,6 +801,7 @@ def main():
         if args.command == "status":
             print(json.dumps({"rows": db.execute("SELECT count(*) FROM captures").fetchone()[0],
                               "nest": str(nest_paths.HOME),
+                              "firewall": firewall_rule.cached_status(),
                               "kb": json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else None}, ensure_ascii=False))
             return
         if args.command == "feedback":
