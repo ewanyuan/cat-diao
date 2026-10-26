@@ -954,7 +954,7 @@ public class BridgeService extends Service {
         if (accessibility == null) {
             json(output, 403, new JSONObject().put("error", "请在手机上开启「猫叼」屏幕控制")); return;
         }
-        byte[] jpeg = accessibility.screenshot();
+        byte[] jpeg = Build.VERSION.SDK_INT >= 30 ? accessibility.screenshot() : null;
         if (jpeg == null) {
             json(output, 503, new JSONObject().put("error", "截图暂不可用；锁屏或受保护的页面可能禁止截图")); return;
         }

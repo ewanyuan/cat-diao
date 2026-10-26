@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- minSdk is 29. API 33 fields such as BigInteger.TWO must fail the release build. -->
+    <issue id="NewApi" severity="fatal" />
+</lint>

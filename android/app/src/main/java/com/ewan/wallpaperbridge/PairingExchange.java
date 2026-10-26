@@ -20,7 +20,7 @@ public final class PairingExchange {
                     + "DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
                     + "15728E5A8AACAA68FFFFFFFFFFFFFFFF";
     public static final BigInteger PRIME = new BigInteger(PRIME_HEX, 16);
-    public static final BigInteger GENERATOR = BigInteger.TWO;
+    public static final BigInteger GENERATOR = BigInteger.valueOf(2);
     public static final int SECRET_BYTES = 256;
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -43,15 +43,15 @@ public final class PairingExchange {
             if (!((item >= '0' && item <= '9') || (item >= 'a' && item <= 'f'))) return false;
         }
         BigInteger number = new BigInteger(value, 16);
-        return number.compareTo(BigInteger.TWO) >= 0
-                && number.compareTo(PRIME.subtract(BigInteger.TWO)) <= 0;
+        return number.compareTo(BigInteger.valueOf(2)) >= 0
+                && number.compareTo(PRIME.subtract(BigInteger.valueOf(2))) <= 0;
     }
 
     public static KeyPair generate() {
         byte[] seed = new byte[32];
         RANDOM.nextBytes(seed);
         BigInteger secret = new BigInteger(1, seed);
-        if (secret.compareTo(BigInteger.TWO) < 0) secret = BigInteger.TWO;
+        if (secret.compareTo(BigInteger.valueOf(2)) < 0) secret = BigInteger.valueOf(2);
         BigInteger publicKey = GENERATOR.modPow(secret, PRIME);
         return new KeyPair(secret.toString(16), pad(publicKey));
     }
@@ -61,10 +61,10 @@ public final class PairingExchange {
         BigInteger secret;
         try { secret = new BigInteger(privateHex, 16); }
         catch (NumberFormatException error) { throw new IllegalArgumentException("private key rejected"); }
-        if (secret.compareTo(BigInteger.TWO) < 0 || secret.compareTo(PRIME.subtract(BigInteger.ONE)) >= 0)
+        if (secret.compareTo(BigInteger.valueOf(2)) < 0 || secret.compareTo(PRIME.subtract(BigInteger.valueOf(1))) >= 0)
             throw new IllegalArgumentException("private key rejected");
         BigInteger shared = new BigInteger(peerPublicHex, 16).modPow(secret, PRIME);
-        if (shared.compareTo(BigInteger.TWO) < 0) throw new IllegalArgumentException("shared secret rejected");
+        if (shared.compareTo(BigInteger.valueOf(2)) < 0) throw new IllegalArgumentException("shared secret rejected");
         return fixed(shared);
     }
 

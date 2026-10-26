@@ -58,4 +58,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = true
+        // Release APK builds run lintVital, which stops only for fatal issues.
+        // NewApi stays fatal so minSdk 29 cannot ship an API 33 field again.
+        fatal += "NewApi"
+    }
 }
