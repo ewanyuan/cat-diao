@@ -15,7 +15,9 @@ if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
 }
 if ($CommandArgs -and $CommandArgs.Count -ge 1 -and $CommandArgs[0] -eq 'pair') {
     $pairArgs = @($CommandArgs | Select-Object -Skip 1)
-    if (-not $pairArgs -or $pairArgs.Count -eq 0) { $pairArgs = @('--wait', '60') }
+    if (-not ($pairArgs | Where-Object { $_ -eq '--wait' -or $_ -like '--wait=*' })) {
+        $pairArgs += @('--wait', '60')
+    }
     $env:CATDIAO_NEST_HOME = $dataHome
     & $python (Join-Path $PSScriptRoot '手机直达.py') --nest $dataHome pair @pairArgs
     exit $LASTEXITCODE

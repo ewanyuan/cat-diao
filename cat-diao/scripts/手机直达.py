@@ -1009,6 +1009,8 @@ def main():
     parser.add_argument("--nest", help="猫叼小窝目录。也可用 CATDIAO_NEST_HOME，或用户目录里的 .catdiao/config.json")
     commands = parser.add_subparsers(dest="command", required=True)
     pairing = commands.add_parser("pair", help="请求手机允许这台电脑")
+    pairing.add_argument("--address", default=argparse.SUPPRESS,
+                         help="自动发现失败时，使用手机‘开始连接’页上的地址；省略则自动寻找")
     pairing.add_argument("--name", default=socket.gethostname())
     pairing.add_argument("--wait", type=int, default=0, help="等待手机出现的秒数；0 表示大约等 8 秒")
     commands.add_parser("status", help="查看电量、温度、存储、内存与权限")
