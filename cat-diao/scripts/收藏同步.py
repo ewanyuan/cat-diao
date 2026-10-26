@@ -569,7 +569,7 @@ def maintain_phone_connection():
             except Exception:
                 pass
         stage = "discovery"
-        found = phone_bridge.discover(token, deadline=deadline)
+        found = phone_bridge.discover(token, deadline=deadline, allow_scan=False)
         if not found:
             return
         if phone_bridge.update_pair_address(token, found, deadline):

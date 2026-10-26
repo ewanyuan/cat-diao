@@ -77,6 +77,17 @@ class OnboardingChecks(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_discovery_tries_the_saved_phone_address_before_network_probes(self):
+        address = "http://10.69.1.253:8767"
+        with patch.object(bridge, "config_read", return_value={"address": address}), \
+                patch.object(bridge, "_phone_at", return_value=True) as phone_check, \
+                patch.object(bridge, "discover_broadcast", side_effect=AssertionError("unexpected UDP")), \
+                patch.object(bridge, "discover_mdns", side_effect=AssertionError("unexpected mDNS")):
+            found = bridge.discover(deadline=bridge.time.monotonic() + 2)
+        self.assertEqual(found, address)
+        phone_check.assert_called_once()
+        self.assertEqual(phone_check.call_args.args[0], address)
+
     def test_mdns_socket_failure_stays_empty(self):
         with patch.object(bridge.socket, "socket", side_effect=OSError("no multicast")):
             self.assertEqual(bridge.discover_mdns(bridge.time.monotonic() + 0.2), [])
@@ -88,7 +99,7 @@ class OnboardingChecks(unittest.TestCase):
         message = str(caught.exception)
         self.assertIn("没有找到手机", message)
         self.assertIn("热点", message)
-        self.assertIn("公用", message)
+        self.assertIn("公共 Wi-Fi", message)
         self.assertIn("run.ps1 pair --address", message)
 
     def test_pair_search_prints_the_code_without_a_wifi_lecture(self):
@@ -151,7 +162,7 @@ class OnboardingChecks(unittest.TestCase):
     def test_skill_points_at_one_command_and_keeps_the_wording_rule(self):
         text = (ROOT / "cat-diao" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("run.ps1 pair", text)
-        self.assertIn(r"请运行 cat-diao 的 scripts\run.ps1 pair，它会自己找到这台手机。", text)
+        self.assertIn(r"请运行 cat-diao 的 scripts\run.ps1 pair；找不到时运行 run.ps1 pair --address http://IP:8767（IP 换成手机显示的地址）。", text)
         self.assertIn("看画面、点画面的真机验证", text)
         self.assertIn("不替代 ADB", text)
         self.assertNotIn("phone pair --wait 60", text)

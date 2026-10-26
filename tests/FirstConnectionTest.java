@@ -39,7 +39,8 @@ public final class FirstConnectionTest {
         require(problems.state == FirstConnection.State.PROBLEMS, "problems");
         require(problems.causes.length == 3, "three causes");
         String joined = String.join("\n", problems.causes);
-        require(joined.contains("同一个 Wi-Fi") && joined.contains("热点") && joined.contains("公用"), "plain causes");
+        require(joined.contains("同一个可互访的 Wi-Fi") && joined.contains("热点")
+                && joined.contains("公共 Wi-Fi") && joined.contains("run.ps1 pair --address"), "plain causes");
         require("retry".equals(problems.primaryAction), "back to waiting");
         require(problems.showQr && problems.showAddress, "address fallback");
 

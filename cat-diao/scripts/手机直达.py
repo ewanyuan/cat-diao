@@ -24,6 +24,7 @@ import urllib.parse
 from pathlib import Path
 
 import catdiao_protocol as protocol
+import lan_discovery
 import nest_paths
 
 
@@ -35,11 +36,12 @@ MDNS_PORT = 5353
 MDNS_GROUP = "224.0.0.251"
 SERVICE_TYPE = "_catdiao._tcp"
 PAIR_MISS = (
-    "没有找到手机。请让手机停在「等电脑」，并确认："
-    "两台设备在同一个 Wi-Fi；公司或访客网络可改用手机热点；"
-    "电脑网络不要设成公用。也可以在手机上复制地址后运行 "
-    "run.ps1 pair --address <地址>。"
+    "没有找到手机。请在手机「开始连接」页查看地址，再运行 "
+    "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
+    "可以改用手机热点或家里 Wi-Fi。"
 )
+DISCOVERY_WINDOW_SECONDS = 3.5
+SCAN_WINDOW_SECONDS = 20.0
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
@@ -211,6 +213,15 @@ def update_pair_address(token, address, deadline=None):
         return True
 
 
+def remember_pair_address(token, address, deadline=None):
+    if not token:
+        return
+    try:
+        update_pair_address(token, address, deadline)
+    except (OSError, RuntimeError, TimeoutError, ValueError):
+        pass
+
+
 def target(address):
     parsed = urllib.parse.urlsplit(address)
     if parsed.scheme != "http" or not parsed.hostname or parsed.port != 8767 or parsed.path not in ("", "/"):
@@ -244,34 +255,9 @@ def source_ip(remote, deadline=None):
 
 
 def local_interfaces(deadline=None):
-    interfaces = []
-    if sys.platform == "win32":
-        try:
-            result = subprocess.run(["ipconfig"], capture_output=True, text=True, errors="replace",
-                                    check=False, timeout=remaining_timeout(deadline, 2))
-        except (OSError, subprocess.SubprocessError):
-            return []
-        for block in re.split(r"\r?\n\s*\r?\n", result.stdout):
-            found = re.findall(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", block)
-            if len(found) >= 2:
-                try:
-                    ip = ipaddress.ip_address(found[0])
-                    mask = ipaddress.ip_address(found[1])
-                    if ip.is_private and not ip.is_link_local and not ip.is_loopback:
-                        interfaces.append((str(ip), str(mask)))
-                except ValueError:
-                    pass
-    if interfaces:
-        return interfaces
-    if deadline is not None:
-        # A hostname lookup has no portable cancellation; do not exceed a check deadline.
-        return []
-    addresses = []
-    try:
-        addresses += socket.gethostbyname_ex(socket.gethostname())[2]
-    except OSError:
-        pass
-    return [(ip, "255.255.255.0") for ip in addresses if ipaddress.ip_address(ip).is_private]
+    interfaces = lan_discovery.get_lan_interfaces(deadline=deadline)
+    return [(item["address"], str(ipaddress.IPv4Network(
+        f"{item['address']}/{item['prefix_length']}", strict=False).netmask)) for item in interfaces]
 
 
 def _stopped(stop):
@@ -490,9 +476,69 @@ def _phone_at(candidate, token, deadline):
         return False
 
 
-def discover(token=None, deadline=None):
-    deadline = deadline if deadline is not None else time.monotonic() + 10
-    listen_until = min(deadline, time.monotonic() + 1.2)
+def _scan_progress(checked):
+    if checked == 0:
+        print("正在局域网里找手机…", end="", flush=True)
+    else:
+        print(f"\r正在局域网里找手机…已检查 {checked} 个地址", end="", flush=True)
+
+
+def _candidate_urls(preferred_address=None):
+    try:
+        saved_address = config_read().get("address", "")
+    except (OSError, RuntimeError, ValueError):
+        saved_address = ""
+    ordered = [preferred_address, saved_address]
+    result = []
+    for value in ordered:
+        if _placeholder(value):
+            continue
+        try:
+            host, port = target(value)
+        except (TypeError, ValueError):
+            continue
+        url = f"http://{host}:{port}"
+        if url not in result:
+            result.append(url)
+    return result
+
+
+def _scan_lan(token, deadline, on_progress):
+    interfaces = local_interfaces(deadline=deadline)
+
+    def probe(ip, timeout):
+        return _phone_at(f"http://{ip}:{lan_discovery.PORT}", None, time.monotonic() + timeout)
+
+    scan_deadline = min(deadline, time.monotonic() + SCAN_WINDOW_SECONDS)
+    result = lan_discovery.scan_for_phone(
+        interfaces, probe, deadline=scan_deadline, on_progress=on_progress)
+    if on_progress:
+        print()
+    if result:
+        address = f"http://{result}:{lan_discovery.PORT}"
+        if _phone_at(address, token, min(deadline, time.monotonic() + 3.0)):
+            return address
+    return None
+
+
+def discover(token=None, deadline=None, preferred_address=None, on_progress=None, tcp_only=False,
+             allow_scan=True):
+    """Find the phone. allow_scan=False skips the LAN sweep (background receiver loop)."""
+    started = time.monotonic()
+    requested_deadline = deadline if deadline is not None else started + SCAN_WINDOW_SECONDS
+    deadline = min(requested_deadline, started + SCAN_WINDOW_SECONDS)
+
+    # A previously working address is the fastest and least network-dependent path.
+    for candidate in _candidate_urls(preferred_address):
+        if time.monotonic() >= deadline:
+            return None
+        if _phone_at(candidate, token, min(deadline, time.monotonic() + 2.5)):
+            return candidate
+
+    if tcp_only:
+        return _scan_lan(token, deadline, on_progress) if allow_scan else None
+
+    listen_until = min(deadline, time.monotonic() + DISCOVERY_WINDOW_SECONDS)
     found = []
     lock = threading.Lock()
     stop = threading.Event()
@@ -525,16 +571,16 @@ def discover(token=None, deadline=None):
                 batch = [item for item in found if item not in checked]
             for candidate in batch:
                 checked.add(candidate)
-                if _phone_at(candidate, token, deadline):
+                if _phone_at(candidate, token, min(listen_until, time.monotonic() + 2.5)):
                     return candidate
             alive = any(thread.is_alive() for thread in threads)
             if not alive:
                 with lock:
                     batch = [item for item in found if item not in checked]
                 for candidate in batch:
-                    if _phone_at(candidate, token, deadline):
+                    if _phone_at(candidate, token, min(listen_until, time.monotonic() + 2.5)):
                         return candidate
-                return None
+                break
             if time.monotonic() >= deadline:
                 return None
             time.sleep(0.02)
@@ -542,6 +588,12 @@ def discover(token=None, deadline=None):
         stop.set()
         for thread in threads:
             thread.join(0.1)
+
+    if not allow_scan or time.monotonic() >= deadline:
+        return None
+    # Directed discovery can be blocked by guest and corporate Wi-Fi. Sweep only
+    # eligible physical LANs, using bounded thread workers and read-only /hello.
+    return _scan_lan(token, deadline, on_progress)
 
 
 def _placeholder(address):
@@ -624,6 +676,7 @@ def request(address, method, path, token=None, body=None, headers=None, stream=F
         result = json.loads(raw.decode("utf-8")) if raw else {}
         if reply.status >= 400:
             raise RuntimeError(result.get("error", f"手机返回错误 {reply.status}"))
+        remember_pair_address(token, address, deadline)
         return result
     finally:
         if watchdog is not None:
@@ -649,6 +702,7 @@ def fetch_bytes(address, token, path):
             except (UnicodeError, ValueError):
                 detail = "手机没有返回画面"
             raise RuntimeError(detail)
+        remember_pair_address(token, address)
         return raw
     finally:
         reply.close()
@@ -707,6 +761,7 @@ def receive_phone_file(phone_ip, token):
                 token, getattr(_REQUEST_NONCE, "value", ""), reply.status,
                 digest.hexdigest(), reply.getheader("X-CatDiao-Sig") or ""):
             raise RuntimeError("手机没有返回有效的配对签名")
+        remember_pair_address(token, f"http://{phone_ip}:8767")
         # link refuses an existing destination on Windows and Linux, so a file
         # that appears mid-transfer is left untouched.
         os.link(partial, destination)
@@ -799,28 +854,27 @@ def listen_for_phone_clipboard():
 
 def pair(address, computer_name, wait_seconds=0):
     private_hex, public_hex = protocol.generate_keypair()
-    searching = _placeholder(address)
-    if searching:
-        address = ""
-    window = time.monotonic() + (wait_seconds if wait_seconds and wait_seconds > 0 else 8)
-    hello = None
-    while time.monotonic() < window:
-        try:
-            reachable = bool(address) and is_reachable(address, deadline=min(window, time.monotonic() + 2))
-            if not reachable:
-                found = discover(deadline=min(window, time.monotonic() + 8))
-                if found:
-                    address = found
-                    reachable = True
-            if not reachable:
-                raise OSError("phone not found")
-            hello = request(address, "GET", "/hello", deadline=min(window, time.monotonic() + 3))
+    window_seconds = wait_seconds if wait_seconds and wait_seconds > 0 else SCAN_WINDOW_SECONDS
+    window = time.monotonic() + window_seconds
+    selected = "" if _placeholder(address) else address
+    found = None
+    while True:
+        # Each attempt is capped at SCAN_WINDOW_SECONDS; keep retrying until --wait runs out
+        # so the phone can still be woken up / opened while the PC is waiting.
+        found = discover(preferred_address=selected,
+                         deadline=min(window, time.monotonic() + SCAN_WINDOW_SECONDS),
+                         on_progress=_scan_progress)
+        if found or time.monotonic() + 1.0 >= window:
             break
-        except (OSError, RuntimeError, ValueError):
-            if time.monotonic() >= window:
-                break
-            time.sleep(min(0.4, window - time.monotonic()))
-    if not isinstance(hello, dict):
+        time.sleep(1.0)
+    address = found
+    if not address:
+        raise RuntimeError(PAIR_MISS)
+    try:
+        hello = request(address, "GET", "/hello", timeout=3, deadline=window)
+    except (OSError, RuntimeError, ValueError):
+        raise RuntimeError(PAIR_MISS)
+    if not isinstance(hello, dict) or hello.get("name") not in ("猫叼", "手机直达"):
         raise RuntimeError(PAIR_MISS)
     if hello.get("protocol") not in (None, "dh-2048-v1") and hello.get("version", "0") < "2":
         raise RuntimeError("手机上的猫叼需要升级到 2.0 才能安全配对")
@@ -852,14 +906,20 @@ def authenticated(args):
     token = saved.get("token")
     if not token:
         raise RuntimeError("尚未连接手机。请先运行：python 手机直达.py pair")
-    if not args.address and not is_reachable(address):
-        found = discover(token)
+    if args.address:
+        if not _phone_at(address, token, time.monotonic() + 3.0):
+            raise RuntimeError("无法验证这台已配对的手机。请检查手机显示的地址，或省略 --address 自动寻找。")
+    else:
+        found = discover(token, preferred_address=address, on_progress=_scan_progress)
         if found:
             address = found
             if not update_pair_address(token, found):
                 raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
         else:
-            raise RuntimeError("手机暂时没有接收连接。请确认手机和电脑在同一 Wi-Fi，并解锁手机打开一次「猫叼」。")
+            raise RuntimeError(
+                "手机暂时没有接收连接。请在手机「开始连接」页查看地址，再运行 "
+                "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
+                "可以换手机热点或家里 Wi-Fi。")
     return address, token
 
 
@@ -897,6 +957,7 @@ def save_download(address, token, path, output):
                 token, getattr(_REQUEST_NONCE, "value", ""), reply.status,
                 digest.hexdigest(), reply.getheader("X-CatDiao-Sig") or ""):
             raise RuntimeError("手机没有返回有效的配对签名")
+        remember_pair_address(token, address)
     except BaseException:
         if created:
             destination.unlink(missing_ok=True)
@@ -953,6 +1014,8 @@ def send_file(address, token, filename):
     if reply.status < 400 and not protocol.verify_response(
             token, headers["X-CatDiao-Nonce"], reply.status, raw, reply.getheader("X-CatDiao-Sig") or ""):
         raise RuntimeError("手机没有返回有效的配对签名")
+    if reply.status < 400:
+        remember_pair_address(token, address)
     data = json.loads(raw.decode("utf-8"))
     if reply.status >= 400:
         raise RuntimeError(data.get("error", "文件发送失败"))
@@ -977,6 +1040,8 @@ def set_wallpaper(address, token, filename):
     if reply.status < 400 and not protocol.verify_response(
             token, headers["X-CatDiao-Nonce"], reply.status, raw, reply.getheader("X-CatDiao-Sig") or ""):
         raise RuntimeError("手机没有返回有效的配对签名")
+    if reply.status < 400:
+        remember_pair_address(token, address)
     result = json.loads(raw.decode("utf-8"))
     if reply.status >= 400:
         raise RuntimeError(result.get("error", "设置壁纸失败"))
@@ -1012,7 +1077,7 @@ def main():
     pairing.add_argument("--address", default=argparse.SUPPRESS,
                          help="自动发现失败时，使用手机‘开始连接’页上的地址；省略则自动寻找")
     pairing.add_argument("--name", default=socket.gethostname())
-    pairing.add_argument("--wait", type=int, default=0, help="等待手机出现的秒数；0 表示大约等 8 秒")
+    pairing.add_argument("--wait", type=int, default=0, help="等手机出现的秒数（每轮自动寻找约 20 秒，找不到会继续重试）；0 表示约 20 秒")
     commands.add_parser("status", help="查看电量、温度、存储、内存与权限")
     commands.add_parser("diagnose", help="查看基础异常提示")
     commands.add_parser("apps", help="列出可打开的应用")

@@ -5,12 +5,12 @@ public final class FirstConnection {
     public static final String SERVICE_TYPE = "_catdiao._tcp";
     public static final int PHONE_PORT = 8767;
     public static final String PC_COMMAND = "run.ps1 pair";
-    public static final String AI_LINE = "请运行 cat-diao 的 scripts\\run.ps1 pair，它会自己找到这台手机。";
+    public static final String AI_LINE = "请运行 cat-diao 的 scripts\\run.ps1 pair；找不到时运行 run.ps1 pair --address http://IP:8767（IP 换成手机显示的地址）。";
     public static final String BLUETOOTH_LOCKED = "先连上电脑，再设置蓝牙备用。";
     public static final String[] CAUSES = {
-            "两台设备不在同一个 Wi-Fi。",
-            "公司或访客 Wi-Fi 常常不让手机和电脑互相访问。可以让手机开热点，电脑连上这个热点。",
-            "电脑把当前网络设成了「公用」。请改成「专用」，防火墙才会放行。"
+            "手机和电脑需要连在同一个可互访的 Wi-Fi。",
+            "公司或公共 Wi-Fi 可能隔离设备。可以让手机开热点，电脑连上热点，或换家里 Wi-Fi。",
+            "自动寻找失败时，可用手机显示的地址运行：run.ps1 pair --address http://IP:8767。"
     };
 
     public enum State { NOT_PAIRED, WAITING, PAIRING, PAIRED, PROBLEMS }
@@ -101,7 +101,7 @@ public final class FirstConnection {
 
     private static Screen waiting(String address) {
         return new Screen(State.WAITING, "等电脑",
-                "在电脑上运行下面这一行。猫叼会自己找到这台手机。",
+                "在电脑上运行下面这一行。找不到时，用本页地址重试。",
                 "复制这句话", "copy", "还是连不上", "problems",
                 false, BLUETOOTH_LOCKED, AI_LINE, address, true, true, how(), "", new String[0], false, "");
     }
@@ -130,6 +130,7 @@ public final class FirstConnection {
     public static String how() {
         return "手机和电脑连同一个 Wi-Fi。\n"
                 + "在电脑上打开 PowerShell，运行 scripts\\run.ps1 pair。\n"
+                + "如果找不到手机，用本页地址运行 run.ps1 pair --address http://IP:8767。\n"
                 + "也可以把上面那句话发给电脑上的 AI 工具。\n"
                 + "手机上会出现 6 位数字。和电脑上的一样，再点允许。";
     }

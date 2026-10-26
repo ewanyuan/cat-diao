@@ -185,6 +185,42 @@ class ConnectionChecks(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_successful_authenticated_request_remembers_new_phone_address(self):
+        previous = bridge.config_read()
+
+        class Phone(BaseHTTPRequestHandler):
+            def do_GET(self):
+                write_signed(self, TOKEN, 200, {"model": "Test"})
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Phone)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        address = "http://127.0.0.1:8767"
+        try:
+            bridge.config_save({"address": "http://192.168.1.10:8767", "token": TOKEN})
+            with patch.object(bridge, "target", return_value=server.server_address):
+                self.assertEqual(bridge.request(address, "GET", "/status", TOKEN)["model"], "Test")
+            self.assertEqual(bridge.config_read().get("address"), address)
+        finally:
+            bridge.config_save(previous)
+            server.shutdown()
+            server.server_close()
+
+    def test_background_discovery_never_sweeps_the_lan(self):
+        calls = []
+        with patch.object(bridge, "_candidate_urls", return_value=[]), \
+                patch.object(bridge, "_scan_lan", side_effect=lambda *a, **k: calls.append(a) or "http://10.0.0.9:8767"):
+            self.assertIsNone(bridge.discover(TOKEN, deadline=bridge.time.monotonic() + 0.3,
+                                              tcp_only=True, allow_scan=False))
+            self.assertIsNone(bridge.discover(TOKEN, deadline=bridge.time.monotonic() + 0.3, allow_scan=False))
+        self.assertEqual(calls, [])
+
+    def test_receiver_loop_disables_lan_sweep(self):
+        source = (Path(__file__).resolve().parents[1] / "cat-diao" / "scripts" / "收藏同步.py").read_text(encoding="utf-8")
+        self.assertIn("allow_scan=False", source)
+
 
 if __name__ == "__main__":
     try:
