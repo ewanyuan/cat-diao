@@ -4,6 +4,8 @@
 
 它不替代 ADB。没有 logcat，没有断点，也不能静默安装。第一次把安装包送到手机时，需要用户在手机上点一次确认。
 
+第一次配对见 `docs/first-connection.md`。电脑上的第一条命令是 `scripts/run.ps1 pair`，它会自己找到手机。
+
 把下面的命令加到支持 MCP 的客户端（工作目录为本技能的 `scripts/`，并已完成配对）：
 
 ```text

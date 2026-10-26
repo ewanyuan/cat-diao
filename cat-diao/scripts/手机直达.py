@@ -15,6 +15,7 @@ import re
 import secrets
 import select
 import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -30,6 +31,15 @@ CONFIG = nest_paths.pairing_file()
 DEFAULT_ADDRESS = "http://127.0.0.1:8767"
 CLIPBOARD_RECEIVER_PORT = 8791
 DISCOVERY_PORT = 8769
+MDNS_PORT = 5353
+MDNS_GROUP = "224.0.0.251"
+SERVICE_TYPE = "_catdiao._tcp"
+PAIR_MISS = (
+    "没有找到手机。请让手机停在「等电脑」，并确认："
+    "两台设备在同一个 Wi-Fi；公司或访客网络可改用手机热点；"
+    "电脑网络不要设成公用。也可以在手机上复制地址后运行 "
+    "run.ps1 pair --address <地址>。"
+)
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
@@ -264,12 +274,102 @@ def local_interfaces(deadline=None):
     return [(ip, "255.255.255.0") for ip in addresses if ipaddress.ip_address(ip).is_private]
 
 
-def discover(token=None, deadline=None):
-    deadline = deadline if deadline is not None else time.monotonic() + 10
+def _stopped(stop):
+    return stop is not None and stop.is_set()
+
+
+def dns_name(name):
+    encoded = bytearray()
+    for label in str(name).strip(".").split("."):
+        raw = label.encode("ascii")
+        if not raw or len(raw) > 63:
+            raise ValueError("bad dns name")
+        encoded.append(len(raw))
+        encoded.extend(raw)
+    encoded.append(0)
+    return bytes(encoded)
+
+
+def dns_query(qclass):
+    return struct.pack(">HHHHHH", 0, 0, 1, 0, 0, 0) + dns_name(SERVICE_TYPE + ".local") + struct.pack(">HH", 12, qclass)
+
+
+def read_dns_name(packet, offset):
+    labels = []
+    seen = set()
+    jumped = False
+    end = offset
+    while offset < len(packet) and len(seen) < 16:
+        if offset in seen:
+            break
+        seen.add(offset)
+        length = packet[offset]
+        if length == 0:
+            if not jumped:
+                end = offset + 1
+            return ".".join(labels), end
+        if length & 0xC0 == 0xC0:
+            if offset + 1 >= len(packet):
+                break
+            if not jumped:
+                end = offset + 2
+            offset = ((length & 0x3F) << 8) | packet[offset + 1]
+            jumped = True
+            continue
+        offset += 1
+        if offset + length > len(packet):
+            break
+        labels.append(packet[offset:offset + length].decode("ascii", "replace"))
+        offset += length
+        if not jumped:
+            end = offset
+    return ".".join(labels), end
+
+
+def mdns_addresses(packet):
+    """Pull http://ip:port out of one mDNS reply for this phone service."""
+    try:
+        if len(packet) < 12:
+            return []
+        counts = struct.unpack(">HHHH", packet[4:12])
+        offset = 12
+        for _ in range(counts[0]):
+            _, offset = read_dns_name(packet, offset)
+            offset += 4
+        ports = {}
+        addresses = {}
+        for _ in range(counts[1] + counts[2] + counts[3]):
+            name, offset = read_dns_name(packet, offset)
+            if offset + 10 > len(packet):
+                break
+            rtype, _rclass, _ttl, length = struct.unpack(">HHIH", packet[offset:offset + 10])
+            body_at = offset + 10
+            offset = body_at + length
+            if offset > len(packet):
+                break
+            body = packet[body_at:offset]
+            if rtype == 33 and SERVICE_TYPE in name and len(body) >= 6:
+                target, _ = read_dns_name(packet, body_at + 6)
+                ports[target] = struct.unpack(">H", body[4:6])[0]
+            elif rtype == 1 and len(body) == 4:
+                addresses[name] = ".".join(str(part) for part in body)
+        found = []
+        for target, port in ports.items():
+            ip = addresses.get(target)
+            if ip and port:
+                found.append("http://" + ip + ":" + str(port))
+        return found
+    except (OSError, ValueError, struct.error, IndexError):
+        return []
+
+
+def discover_broadcast(deadline, stop=None, on_candidate=None):
     candidates = []
     receivers = []
     try:
         for address, mask in local_interfaces(deadline=deadline):
+            if _stopped(stop) or time.monotonic() >= deadline:
+                break
             udp = None
             try:
                 remaining_timeout(deadline, 1.2)
@@ -281,46 +381,174 @@ def discover(token=None, deadline=None):
                 udp.setblocking(False)
                 udp.sendto(b"PHONE_BRIDGE_DISCOVER_V1", (broadcast, DISCOVERY_PORT))
                 receivers.append(udp)
-            except (OSError, ValueError):
+            except (OSError, ValueError) as error:
                 if udp is not None:
                     udp.close()
+                if isinstance(error, TimeoutError):
+                    break
                 continue
         # All interfaces share one response window, leaving time to verify a real phone reply.
         broadcast_deadline = min(deadline, time.monotonic() + 1.2)
-        while receivers and time.monotonic() < broadcast_deadline:
-            ready, _, _ = select.select(receivers, [], [], remaining_timeout(broadcast_deadline, 1.2))
-            if not ready:
+        while receivers and time.monotonic() < broadcast_deadline and not _stopped(stop):
+            try:
+                timeout = remaining_timeout(min(broadcast_deadline, time.monotonic() + 0.1), 0.1)
+            except TimeoutError:
                 break
+            ready, _, _ = select.select(receivers, [], [], timeout)
             for udp in ready:
                 try:
                     payload, peer = udp.recvfrom(128)
-                    if payload == b"PHONE_BRIDGE_V1:8767":
-                        candidates.append("http://" + peer[0] + ":8767")
                 except OSError:
                     continue
+                if payload != b"PHONE_BRIDGE_V1:8767":
+                    continue
+                candidate = "http://" + peer[0] + ":8767"
+                if candidate in candidates:
+                    continue
+                candidates.append(candidate)
+                if on_candidate is not None:
+                    on_candidate(candidate)
     finally:
         for udp in receivers:
             udp.close()
-    for candidate in dict.fromkeys(candidates):
+    return candidates
+
+
+def discover_mdns(deadline, stop=None, on_candidate=None):
+    """Query _catdiao._tcp. Failures stay empty so UDP discovery still runs."""
+    try:
+        return _discover_mdns(deadline, stop, on_candidate)
+    except Exception:
+        return []
+
+
+def _discover_mdns(deadline, stop, on_candidate):
+    sockets = []
+    try:
         try:
-            hello = request(candidate, "GET", "/hello", timeout=2, deadline=deadline)
-            if not isinstance(hello, dict) or hello.get("name") not in ("手机直达", "猫叼"):
-                continue
-            if token:
+            multicast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            multicast.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            multicast.bind(("", MDNS_PORT))
+            membership = struct.pack("4s4s", socket.inet_aton(MDNS_GROUP), socket.inet_aton("0.0.0.0"))
+            multicast.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            multicast.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
+            multicast.setblocking(False)
+            multicast.sendto(dns_query(1), (MDNS_GROUP, MDNS_PORT))
+            sockets.append(multicast)
+        except OSError:
+            pass
+        try:
+            direct = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            direct.bind(("", 0))
+            direct.setblocking(False)
+            direct.sendto(dns_query(0x8001), (MDNS_GROUP, MDNS_PORT))
+            sockets.append(direct)
+        except OSError:
+            pass
+        found = []
+        while sockets and time.monotonic() < deadline and not _stopped(stop):
+            try:
+                timeout = remaining_timeout(min(deadline, time.monotonic() + 0.1), 0.1)
+            except TimeoutError:
+                break
+            ready, _, _ = select.select(sockets, [], [], timeout)
+            for sock in ready:
                 try:
-                    heartbeat = request(candidate, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
-                    if not isinstance(heartbeat, dict) or heartbeat.get("connected") is not True:
-                        raise RuntimeError("手机未确认连接")
-                except RuntimeError:
-                    # Older app versions do not expose /heartbeat; /status still
-                    # verifies the paired token and keeps discovery compatible.
-                    status = request(candidate, "GET", "/status", token, timeout=3, deadline=deadline)
-                    if not isinstance(status, dict) or not status.get("model"):
-                        raise RuntimeError("手机未确认连接")
-            return candidate
-        except (OSError, RuntimeError, ValueError):
-            continue
-    return None
+                    payload, _peer = sock.recvfrom(4096)
+                except OSError:
+                    continue
+                for candidate in mdns_addresses(payload):
+                    if candidate in found:
+                        continue
+                    found.append(candidate)
+                    if on_candidate is not None:
+                        on_candidate(candidate)
+        return found
+    finally:
+        for sock in sockets:
+            sock.close()
+
+
+def _phone_at(candidate, token, deadline):
+    try:
+        hello = request(candidate, "GET", "/hello", timeout=2, deadline=deadline)
+        if not isinstance(hello, dict) or hello.get("name") not in ("手机直达", "猫叼"):
+            return False
+        if token:
+            try:
+                heartbeat = request(candidate, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
+                if not isinstance(heartbeat, dict) or heartbeat.get("connected") is not True:
+                    raise RuntimeError("手机未确认连接")
+            except RuntimeError:
+                # Older app versions do not expose /heartbeat; /status still
+                # verifies the paired token and keeps discovery compatible.
+                status = request(candidate, "GET", "/status", token, timeout=3, deadline=deadline)
+                if not isinstance(status, dict) or not status.get("model"):
+                    return False
+        return True
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
+def discover(token=None, deadline=None):
+    deadline = deadline if deadline is not None else time.monotonic() + 10
+    listen_until = min(deadline, time.monotonic() + 1.2)
+    found = []
+    lock = threading.Lock()
+    stop = threading.Event()
+
+    def add(url):
+        if not url:
+            return
+        with lock:
+            if url not in found:
+                found.append(url)
+
+    def collect(func):
+        try:
+            result = func(listen_until, stop, add)
+        except Exception:
+            return
+        for item in result or []:
+            add(item)
+
+    threads = [
+        threading.Thread(target=collect, args=(discover_broadcast,), daemon=True),
+        threading.Thread(target=collect, args=(discover_mdns,), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    checked = set()
+    try:
+        while True:
+            with lock:
+                batch = [item for item in found if item not in checked]
+            for candidate in batch:
+                checked.add(candidate)
+                if _phone_at(candidate, token, deadline):
+                    return candidate
+            alive = any(thread.is_alive() for thread in threads)
+            if not alive:
+                with lock:
+                    batch = [item for item in found if item not in checked]
+                for candidate in batch:
+                    if _phone_at(candidate, token, deadline):
+                        return candidate
+                return None
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.02)
+    finally:
+        stop.set()
+        for thread in threads:
+            thread.join(0.1)
+
+
+def _placeholder(address):
+    if address is None or not str(address).strip():
+        return True
+    host = (urllib.parse.urlsplit(str(address).strip()).hostname or "").strip("[]").lower()
+    return host in {"", "127.0.0.1", "0.0.0.0", "::1"}
 
 
 def is_reachable(address, deadline=None):
@@ -571,17 +799,29 @@ def listen_for_phone_clipboard():
 
 def pair(address, computer_name, wait_seconds=0):
     private_hex, public_hex = protocol.generate_keypair()
-    deadline = time.monotonic() + wait_seconds
-    while True:
+    searching = _placeholder(address)
+    if searching:
+        address = ""
+    window = time.monotonic() + (wait_seconds if wait_seconds and wait_seconds > 0 else 8)
+    hello = None
+    while time.monotonic() < window:
         try:
-            if not is_reachable(address):
-                address = discover() or address
-            hello = request(address, "GET", "/hello")
+            reachable = bool(address) and is_reachable(address, deadline=min(window, time.monotonic() + 2))
+            if not reachable:
+                found = discover(deadline=min(window, time.monotonic() + 8))
+                if found:
+                    address = found
+                    reachable = True
+            if not reachable:
+                raise OSError("phone not found")
+            hello = request(address, "GET", "/hello", deadline=min(window, time.monotonic() + 3))
             break
-        except OSError:
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(2)
+        except (OSError, RuntimeError, ValueError):
+            if time.monotonic() >= window:
+                break
+            time.sleep(min(0.4, window - time.monotonic()))
+    if not isinstance(hello, dict):
+        raise RuntimeError(PAIR_MISS)
     if hello.get("protocol") not in (None, "dh-2048-v1") and hello.get("version", "0") < "2":
         raise RuntimeError("手机上的猫叼需要升级到 2.0 才能安全配对")
     print(f"找到手机：{hello.get('model', 'Android')}。正在请求手机确认电脑连接。")
@@ -592,8 +832,7 @@ def pair(address, computer_name, wait_seconds=0):
     except ValueError as error:
         raise RuntimeError("手机没有返回可用的配对公钥") from error
     pair_id = result["id"]
-    print(f"请核对手机上的 6 位数字是否为 {code}。一致后再点「允许」。")
-    print("如果两边数字不同，点「拒绝」。这个 Wi-Fi 若禁止设备互访，两边都会一直找不到对方。")
+    print(f"请核对手机上的 6 位数字是否为 {code}。一致后再点「允许」。不同就点「拒绝」。")
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         state = request(address, "GET", "/pair-status?id=" + urllib.parse.quote(pair_id))["state"]
@@ -766,12 +1005,12 @@ def diagnosis(status):
 
 def main():
     parser = argparse.ArgumentParser(description="通过局域网控制已允许的安卓手机；无需无线调试")
-    parser.add_argument("--address", help="猫叼首页右上角「⋯ → 小窝连接」显示的连接地址，默认使用上次地址")
+    parser.add_argument("--address", help="自动发现失败时，用手机「开始连接」页上的地址；省略则自动寻找")
     parser.add_argument("--nest", help="猫叼小窝目录。也可用 CATDIAO_NEST_HOME，或用户目录里的 .catdiao/config.json")
     commands = parser.add_subparsers(dest="command", required=True)
     pairing = commands.add_parser("pair", help="请求手机允许这台电脑")
     pairing.add_argument("--name", default=socket.gethostname())
-    pairing.add_argument("--wait", type=int, default=0, help="等待手机打开应用的秒数")
+    pairing.add_argument("--wait", type=int, default=0, help="等待手机出现的秒数；0 表示大约等 8 秒")
     commands.add_parser("status", help="查看电量、温度、存储、内存与权限")
     commands.add_parser("diagnose", help="查看基础异常提示")
     commands.add_parser("apps", help="列出可打开的应用")
@@ -804,7 +1043,10 @@ def main():
     args = parser.parse_args()
     if args.command == "pair":
         saved = config_read()
-        pair(args.address or saved.get("address", DEFAULT_ADDRESS), args.name, args.wait)
+        chosen = args.address if args.address else saved.get("address", "")
+        if _placeholder(chosen):
+            chosen = ""
+        pair(chosen, args.name, args.wait)
         return
     if args.command == "clipboard-listen":
         listen_for_phone_clipboard()

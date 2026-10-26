@@ -15,11 +15,14 @@ javac -encoding UTF-8 -d "$classes" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/ReconnectSchedule.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/RoutePolicy.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/PermissionGuide.java" \
+  "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/FirstConnection.java" \
+  "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/QrCode.java" \
   "$repository/tests/ComputerConnectionTest.java" \
   "$repository/tests/CatDiaoEdgeTest.java" \
   "$repository/tests/BluetoothWireTest.java" \
-  "$repository/tests/SecurityPolicyTest.java"
-for check in CatDiaoEdgeTest ComputerConnectionTest BluetoothWireTest SecurityPolicyTest; do
+  "$repository/tests/SecurityPolicyTest.java" \
+  "$repository/tests/FirstConnectionTest.java"
+for check in CatDiaoEdgeTest ComputerConnectionTest BluetoothWireTest SecurityPolicyTest FirstConnectionTest; do
   java -cp "$classes" "com.ewan.wallpaperbridge.$check"
 done
 export CATDIAO_TEST_JAVA="${JAVA_HOME:+$JAVA_HOME/bin/}java"

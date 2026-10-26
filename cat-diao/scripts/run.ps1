@@ -13,8 +13,15 @@ $python = Join-Path $runtime 'Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw 'Cat Diao is not configured. Run setup.ps1 from this skill first.'
 }
+if ($CommandArgs -and $CommandArgs.Count -ge 1 -and $CommandArgs[0] -eq 'pair') {
+    $pairArgs = @($CommandArgs | Select-Object -Skip 1)
+    if (-not $pairArgs -or $pairArgs.Count -eq 0) { $pairArgs = @('--wait', '60') }
+    $env:CATDIAO_NEST_HOME = $dataHome
+    & $python (Join-Path $PSScriptRoot '手机直达.py') --nest $dataHome pair @pairArgs
+    exit $LASTEXITCODE
+}
 if (-not $CommandArgs -or $CommandArgs.Count -lt 2) {
-    throw 'Use: run.ps1 phone <command> or run.ps1 collector <command>.'
+    throw 'Use: run.ps1 pair, run.ps1 phone <command>, or run.ps1 collector <command>.'
 }
 $script = switch ($CommandArgs[0]) {
     'phone' { Join-Path $PSScriptRoot '手机直达.py' }

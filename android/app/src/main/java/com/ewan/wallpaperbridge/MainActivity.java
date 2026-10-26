@@ -35,12 +35,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.Enumeration;
 import java.util.Map;
 
 public class MainActivity extends Activity {
@@ -79,7 +75,6 @@ public class MainActivity extends Activity {
     private LinearLayout recentList;
     private String recentSignature = "";
     private String pairDialogId = "";
-    private AlertDialog pairDialog;
     private AlertDialog setupDialog;
     private boolean setupInProgress;
     private int setupAttemptedStep;
@@ -143,8 +138,6 @@ public class MainActivity extends Activity {
         BridgeService.removeConnectionListener(connectionListener);
         mainHandler.removeCallbacks(refresh);
         mainHandler.removeCallbacks(connectionRefresh);
-        if (pairDialog != null) pairDialog.dismiss();
-        pairDialog = null;
         if (setupDialog != null) setupDialog.dismiss();
         setupDialog = null;
         pairDialogId = "";
@@ -243,8 +236,8 @@ public class MainActivity extends Activity {
         connectionBluetooth = button("用蓝牙连接", false);
         connectionBluetooth.setOnClickListener(v -> setupBluetooth());
         connectionPanel.addView(connectionBluetooth);
-        connectionPanel.addView(label("连接设置  ›", 13, CORAL_DARK, true));
-        connectionPanel.setOnClickListener(v -> showDeviceInfo());
+        connectionPanel.addView(label("开始连接  ›", 13, CORAL_DARK, true));
+        connectionPanel.setOnClickListener(v -> openConnection());
         revokeButton = button("移除小窝连接", false);
         LinearLayout.LayoutParams revokeLayout = new LinearLayout.LayoutParams(-1, dp(50));
         revokeLayout.topMargin = dp(14);
@@ -309,8 +302,14 @@ public class MainActivity extends Activity {
         computerStatus.setTextColor(trusted.isEmpty() ? MUTED : online ? MINT : CORAL_DARK);
         computerStatus.setVisibility(View.VISIBLE);
         if (trusted.isEmpty()) {
-            connectionTitle.setText("把电脑连成你的小窝");
-            connectionSteps.setText("首次连接时，两台设备连同一个 Wi-Fi。\n在电脑上说「连接猫叼」，再在手机点「允许」。");
+            PairingGate.Request pendingPair = BridgeService.pendingPair();
+            if (pendingPair != null) {
+                connectionTitle.setText("电脑正在请求连接");
+                connectionSteps.setText("点这里核对 6 位数字。");
+            } else {
+                connectionTitle.setText("把电脑连成你的小窝");
+                connectionSteps.setText("点这里，一步一步连。电脑上运行 run.ps1 pair。");
+            }
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (!online) {
             if (checking) {
@@ -393,36 +392,20 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openConnection() {
+        startActivity(new Intent(this, ConnectionActivity.class));
+    }
+
     private void showPairRequest() {
         PairingGate.Request request = BridgeService.pendingPair();
-        boolean pending = request != null;
-        if (!pending) {
-            if (pairDialog != null) pairDialog.dismiss();
-            pairDialog = null;
+        if (request == null) {
+            pairDialogId = "";
             return;
         }
+        if (ConnectionActivity.isVisible()) return;
         if (request.id.equals(pairDialogId)) return;
-        if (pairDialog != null) pairDialog.dismiss();
         pairDialogId = request.id;
-        String confirm = request.confirmCode == null || request.confirmCode.isEmpty()
-                ? "" : "\n\n核对数字：" + request.confirmCode + "\n与电脑上显示的一致，再点「允许」。";
-        pairDialog = new AlertDialog.Builder(this)
-                .setTitle("连接小窝？")
-                .setMessage("设备：" + request.name + "\n地址：" + request.address + confirm
-                        + "\n\n收藏不需要额外权限。看画面、点画面才需要屏幕控制。")
-                .setNegativeButton("拒绝", (dialog, which) -> BridgeService.decidePair(this, request.id, false))
-                .setPositiveButton("允许", (dialog, which) -> {
-                    if (!BridgeService.decidePair(this, request.id, true)) {
-                        Toast.makeText(this, "这条连接请求已失效，请从电脑重新发起", Toast.LENGTH_LONG).show();
-                        mainHandler.post(this::refreshHome);
-                        return;
-                    }
-                    BridgeService.requestCaptureSync();
-                    mainHandler.post(this::refreshHome);
-                    mainHandler.postDelayed(this::showPermissionGuide, 300);
-                })
-                .create();
-        pairDialog.show();
+        openConnection();
     }
 
     private void showMore(View anchor) {
@@ -437,7 +420,7 @@ public class MainActivity extends Activity {
         menu.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showTransfer();
             else if (item.getItemId() == 2) toggleOverlay();
-            else if (item.getItemId() == 3) showDeviceInfo();
+            else if (item.getItemId() == 3) openConnection();
             else if (item.getItemId() == 4)
                 startActivity(new Intent(this, OnboardingActivity.class));
             else if (item.getItemId() == 5) setupBluetooth();
@@ -671,61 +654,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void showDeviceInfo() {
-        String trusted = BridgeService.trustedName(this);
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(22), dp(8), dp(22), dp(12));
-        scroll.addView(body);
-        body.addView(label("我的小窝", 17, INK, true));
-        TextView computer = label(trusted.isEmpty()
-                ? "还没有配对电脑。收藏会先保存在手机里。"
-                : "已配对电脑：" + trusted + "。当前连接结果显示在首页。", 14, MUTED, false);
-        computer.setPadding(0, dp(5), 0, 0);
-        body.addView(computer);
-        TextView instructions = label(trusted.isEmpty()
-                ? "电脑首次使用：让两台设备连接同一 Wi-Fi，在电脑上的 AI 工具（如 Codex）中说「从 github.com/ewanyuan/cat-diao 安装 cat-diao 电脑端，完成首次配置，再连接猫叼」。手机上的 6 位数字要和电脑一致，再点「允许」。如果两边互相看不到，这个 Wi-Fi 可能不允许设备互访。"
-                : "换了网络也不用重新配对。打开电脑上的猫叼接收，手机会自动再试。开启蓝牙备用连接后，可以自动找回地址，也能补送收藏。", 14, INK, false);
-        instructions.setPadding(0, dp(12), 0, dp(8));
-        body.addView(instructions);
-        Button bluetoothButton = button(BridgeService.bluetoothOnline() ? "查看蓝牙连接" : "设置蓝牙备用连接", false);
-        bluetoothButton.setOnClickListener(v -> setupBluetooth());
-        body.addView(bluetoothButton);
-        String bluetoothHelp = BridgeService.bluetoothOnline() ? "蓝牙已连接，收藏可以送达。" :
-                "permission_needed".equals(BridgeService.bluetoothState()) ? "允许「附近设备」后即可使用蓝牙。" :
-                "disabled".equals(BridgeService.bluetoothState()) ? "请打开手机蓝牙。" :
-                "蓝牙首次使用：在系统设置中将手机与电脑配对。";
-        body.addView(label(bluetoothHelp, 12, MUTED, false));
-        TextView address = label("连接地址：" + findLocalAddress(), 12, MUTED, false);
-        address.setTextIsSelectable(true);
-        address.setPadding(0, dp(6), 0, 0);
-        body.addView(address);
-        TextView addressHelp = label("电脑找不到手机时，把上面的连接地址告诉 AI 工具。", 12, MUTED, false);
-        addressHelp.setPadding(0, dp(6), 0, 0);
-        body.addView(addressHelp);
-        String error = getSharedPreferences("bridge", MODE_PRIVATE).getString("capture_sync_error", "");
-        if (!error.isEmpty()) {
-            TextView diagnostic = label("最近一次同步：" + error, 12, MUTED, false);
-            diagnostic.setPadding(0, dp(6), 0, 0);
-            body.addView(diagnostic);
-        }
-        if (!trusted.isEmpty()) {
-            TextView explanation = label("换小窝或不再使用这台设备时，才需要移除。", 12, MUTED, false);
-            explanation.setPadding(0, dp(17), 0, 0);
-            body.addView(explanation);
-            TextView disconnect = label("移除小窝连接  ›", 13, MUTED, false);
-            disconnect.setPadding(0, dp(8), 0, dp(8));
-            body.addView(disconnect);
-            disconnect.setOnClickListener(v -> confirmRevoke());
-        }
-        new AlertDialog.Builder(this).setTitle("小窝连接")
-                .setView(scroll).setPositiveButton("完成", null).show();
-    }
-
     private void setupBluetooth() {
         if (BridgeService.trustedName(this).isEmpty()) {
-            Toast.makeText(this, "先连接一次小窝，再开启蓝牙备用连接", Toast.LENGTH_LONG).show();
+            openConnection();
             return;
         }
         new AlertDialog.Builder(this).setTitle("用蓝牙找回小窝")
@@ -880,27 +811,6 @@ public class MainActivity extends Activity {
     private static String fileName(String path) {
         int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         return path.substring(slash + 1);
-    }
-
-    private String findLocalAddress() {
-        try {
-            String fallback = null;
-            Enumeration<NetworkInterface> networks = NetworkInterface.getNetworkInterfaces();
-            while (networks.hasMoreElements()) {
-                NetworkInterface network = networks.nextElement();
-                if (!network.isUp() || network.isLoopback()) continue;
-                Enumeration<InetAddress> addresses = network.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    InetAddress address = addresses.nextElement();
-                    if (!(address instanceof Inet4Address) || address.isLoopbackAddress()) continue;
-                    String ip = address.getHostAddress();
-                    if (network.getName().startsWith("wlan")) return "http://" + ip + ":8767";
-                    if (address.isSiteLocalAddress()) fallback = ip;
-                }
-            }
-            if (fallback != null) return "http://" + fallback + ":8767";
-        } catch (Exception ignored) { }
-        return "请连接与小窝相同的 Wi-Fi";
     }
 
     private LinearLayout panel(int fill, int stroke) {

@@ -23,6 +23,8 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.Uri;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Environment;
@@ -273,6 +275,7 @@ public class BridgeService extends Service {
             if (!destroyed && active == this) showNotification("连接未开启，请重新打开应用");
         });
         startServer();
+        advertise();
         updateOverlay();
         captureWorker = new Thread(this::captureSyncLoop, "phone-capture-sync");
         captureWorker.start();
@@ -300,6 +303,7 @@ public class BridgeService extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         startServer();
+        advertise();
         startBluetooth();
         if (intent != null && ACTION_CHECK_CONNECTION.equals(intent.getAction())) {
             startConnectionChecks();
@@ -319,6 +323,7 @@ public class BridgeService extends Service {
         }
         stopConnectionChecks();
         LocalBridgeServer server = localServer;
+        stopAdvertising();
         if (server != null) server.close();
         ComputerConnection.Attempt attempt = captureAttempt;
         if (attempt != null) attempt.cancel();
@@ -491,6 +496,40 @@ public class BridgeService extends Service {
 
     private void showNotification(String message) {
         getSystemService(NotificationManager.class).notify(47, notification(message));
+    }
+
+    private NsdManager.RegistrationListener nsdListener;
+
+    private void advertise() {
+        if (destroyed || nsdListener != null) return;
+        try {
+            NsdManager manager = (NsdManager) getSystemService(NSD_SERVICE);
+            if (manager == null) return;
+            NsdServiceInfo info = new NsdServiceInfo();
+            info.setServiceName("catdiao");
+            info.setServiceType(FirstConnection.SERVICE_TYPE + ".");
+            info.setPort(PORT);
+            NsdManager.RegistrationListener listener = new NsdManager.RegistrationListener() {
+                @Override public void onServiceRegistered(NsdServiceInfo registered) { }
+                @Override public void onRegistrationFailed(NsdServiceInfo service, int error) { nsdListener = null; }
+                @Override public void onServiceUnregistered(NsdServiceInfo service) { nsdListener = null; }
+                @Override public void onUnregistrationFailed(NsdServiceInfo service, int error) { }
+            };
+            nsdListener = listener;
+            manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener);
+        } catch (RuntimeException ignored) {
+            nsdListener = null;
+        }
+    }
+
+    private void stopAdvertising() {
+        NsdManager.RegistrationListener listener = nsdListener;
+        nsdListener = null;
+        if (listener == null) return;
+        try {
+            NsdManager manager = (NsdManager) getSystemService(NSD_SERVICE);
+            if (manager != null) manager.unregisterService(listener);
+        } catch (RuntimeException ignored) { }
     }
 
     private void startServer() {
