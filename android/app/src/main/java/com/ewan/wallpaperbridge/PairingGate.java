@@ -17,13 +17,20 @@ final class PairingGate {
         final String name;
         final String address;
         final String token;
+        final String confirmCode;
+        final String peerPublic;
+        final String phonePublic;
         final long created;
         volatile String outcome = "pending";
 
-        Request(String name, String address, String token, long created) {
+        Request(String name, String address, String token, String confirmCode,
+                String peerPublic, String phonePublic, long created) {
             this.name = name;
             this.address = address;
             this.token = token;
+            this.confirmCode = confirmCode == null ? "" : confirmCode;
+            this.peerPublic = peerPublic == null ? "" : peerPublic;
+            this.phonePublic = phonePublic == null ? "" : phonePublic;
             this.created = created;
         }
     }
@@ -39,13 +46,18 @@ final class PairingGate {
     }
 
     synchronized Request offer(String name, String address, String token, BooleanSupplier paired) {
+        return offer(name, address, token, "", "", "", paired);
+    }
+
+    synchronized Request offer(String name, String address, String token, String confirmCode,
+                               String peerPublic, String phonePublic, BooleanSupplier paired) {
         if (paired.getAsBoolean()) return null;
         expire();
         if (request != null && request.outcome.equals("pending")) {
             return request.name.equals(name) && request.address.equals(address) && request.token.equals(token)
                     ? request : null;
         }
-        request = new Request(name, address, token, clock.getAsLong());
+        request = new Request(name, address, token, confirmCode, peerPublic, phonePublic, clock.getAsLong());
         return request;
     }
 

@@ -1,5 +1,6 @@
 package com.ewan.wallpaperbridge;
 
+import android.annotation.TargetApi;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accessibilityservice.GestureDescription;
@@ -90,6 +91,7 @@ public class PhoneAccessibilityService extends AccessibilityService {
         return latch.await(5, TimeUnit.SECONDS) && result.get();
     }
 
+    @TargetApi(30)
     public byte[] screenshot() throws InterruptedException {
         if (Build.VERSION.SDK_INT < 30) return null;
         CountDownLatch latch = new CountDownLatch(1);

@@ -22,13 +22,15 @@ A local network companion for Android and Windows. Save links, move text and fil
 
 以 Codex 为例，在 Windows 电脑中说：
 
-> 请从 `https://github.com/ewanyuan/cat-diao` 安装 `ewan-android-phone` 技能，阅读它的 `SKILL.md`，帮我完成首次配置，并告诉我如何在手机安装猫叼。
+> 请从 `https://github.com/ewanyuan/cat-diao` 安装 `cat-diao` 技能，阅读它的 `SKILL.md`，帮我完成首次配置，并告诉我如何在手机安装猫叼。
 
-Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当前用户的技能目录，并运行一次 `scripts/setup.ps1`。电脑需要 Python 3；首次配置会联网安装 `openpyxl`，并设置接收程序随 Windows 登录启动。个人数据保存在 `%LOCALAPPDATA%/猫叼小窝/`，不会放进技能目录。
+Codex 会把仓库中的 [`cat-diao/`](cat-diao/) 放到当前用户的技能目录，并运行一次 `scripts/setup.ps1`。电脑需要 Python 3；首次配置会联网安装 `openpyxl`，并设置接收程序随 Windows 登录启动。个人数据默认在 `%LOCALAPPDATA%/猫叼小窝/`，也可以在安装时自己选「猫叼小窝」的位置；配对和收藏不会放进技能目录。
 
-手机安装 [猫叼 1.13 APK](ewan-android-phone/assets/cat-diao-android-1.13.apk)，打开后与电脑连接到可互访的同一 Wi-Fi。先按上面的步骤安装并配置电脑端，再让电脑上的 AI 工具（如 Codex）发起配对；手机出现请求时点“允许”。屏幕控制、悬浮窗和修改亮度可按应用引导另行开启，收藏同步本身不需要这些权限。无需反复输入配对码。
+2.0 是新的应用包名，安装包需要主人在本机用新钥匙签名后才能装，仓库里不附带 2.0 APK，也不附带钥匙。新签名不能覆盖旧猫叼，发布前要主人同意做一次卸载或先强制停止旧应用。旧应用里还没送出的收藏不会跟着过去，电脑上的台账还在。两边不要同时运行。
 
-**换了 Wi-Fi 后：**只要电脑端「猫叼接收」和手机猫叼仍在运行，电脑会在后台每 10 秒查找已配对手机；两台设备恢复到可互访的同一 Wi-Fi 后，会自动更新连接地址并补送收藏。打开手机首页或点「重新检查」会发起一次真实连接检查，最多 10 秒就显示成功或未连接；后台继续重试时会保留本次结果，不会一直显示「正在重连」。若一直离线，再让电脑上的 AI 工具（如 Codex）说“重新连接猫叼”；必要时从手机首页右上角“⋯ → 小窝连接”复制连接地址。升级到 1.13 时，手机应用和电脑端技能需要一起更新，才能确认电脑接收端的实际回应。
+手机与电脑连到可互访的同一 Wi-Fi 后，在手机上点「开始连接」，电脑运行 `scripts/run.ps1 pair`。也可以把手机上的那句话发给电脑上的 AI 工具。猫叼会自己找到手机。手机和电脑会各显示同一个 6 位数字，一致后再点「允许」。收藏不需要额外权限；看画面、点画面需要屏幕控制。安卓 13 及以上请先在应用信息里允许受限设置。猫叼用来做看画面、点画面的真机验证，不替代 ADB。内容在局域网上是明文，请只用信任的 Wi-Fi。步骤见 [`docs/first-connection.md`](docs/first-connection.md)。
+
+**换了 Wi-Fi 后：**只要电脑端「猫叼接收」和手机猫叼仍在运行，电脑会在后台每 10 秒查找已配对手机；两台设备恢复到可互访的同一 Wi-Fi 后，会自动更新连接地址并补送收藏。打开手机首页或点「重新检查」会发起一次真实连接检查，最多 10 秒就显示成功或未连接；后台继续重试时会保留本次结果，不会一直显示「正在重连」。若一直离线，再让电脑上的 AI 工具（如 Codex）说“重新连接猫叼”；必要时从手机「开始连接」页复制连接地址。2.0 的手机和电脑要一起更新。断线后会自动重试，间隔从大约 10 秒增加到最多 60 秒。
 
 ### 可以做什么
 
@@ -48,7 +50,7 @@ Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当�
 
 ### 使用边界
 
-手机和电脑通过局域网 HTTP 与配对令牌通信，请在信任的 Wi-Fi 上使用，避免传输敏感文件。手机锁屏或长时间熄屏时可能暂停连接；解锁后再试。猫叼不在前台时，打开其他应用可能需要点手机通知。受系统保护的页面可能无法截图。当前手机界面为中文，发布包尚未在全新电脑和其他安卓机型上验证。
+手机和电脑通过局域网 HTTP 通信。配对令牌不会放到网络上，每次请求单独签名；正文仍是明文，请在信任的 Wi-Fi 上使用，避免传输敏感文件。手机锁屏或长时间熄屏时可能暂停连接；解锁后再试。猫叼不在前台时，打开其他应用可能需要点手机通知。受系统保护的页面可能无法截图。当前手机界面为中文，发布包尚未在全新电脑和其他安卓机型上验证。
 
 安卓源码在 [`android/`](android/)；可用 Android Studio 导入。构建配置采用 Android Gradle Plugin 8.7.3、Android SDK 36 和 Java 17。仓库不含签名密钥，自行构建的 APK 通常不能直接覆盖这里提供的安装包。
 
@@ -58,13 +60,15 @@ Codex 会把仓库中的 [`ewan-android-phone/`](ewan-android-phone/) 放到当�
 
 For example, ask Codex on a Windows PC:
 
-> Install the `ewan-android-phone` skill from `https://github.com/ewanyuan/cat-diao`. Read its `SKILL.md`, complete the first-time setup, and show me how to install the Android app.
+> Install the `cat-diao` skill from `https://github.com/ewanyuan/cat-diao`. Read its `SKILL.md`, complete the first-time setup, and show me how to install the Android app.
 
-Codex should place [`ewan-android-phone/`](ewan-android-phone/) in the current user's skills directory and run `scripts/setup.ps1` once. The PC needs Python 3. Initial setup downloads `openpyxl` and starts the receiver when you sign in to Windows. Pairing details and received content stay in `%LOCALAPPDATA%/猫叼小窝/`, outside the skill folder.
+Codex should place [`cat-diao/`](cat-diao/) in the current user's skills directory and run `scripts/setup.ps1` once. The PC needs Python 3. Initial setup downloads `openpyxl` and starts the receiver when you sign in to Windows. Pairing details and received content stay outside the skill folder. The nest folder can stay at `%LOCALAPPDATA%/猫叼小窝/` or be chosen during setup.
 
-Install the [Cat Diao 1.13 APK](ewan-android-phone/assets/cat-diao-android-1.13.apk) on the phone. Connect the phone and PC to the same Wi-Fi where devices can reach each other. Set up the PC component as described above, then ask your AI tool, such as Codex, to pair and approve the request on the phone. Screen control, the floating window, and brightness control can be enabled separately through the app's guide; saving links does not require those permissions. Pairing does not require a recurring code.
+Version 2.0 uses a new application id. The owner signs that build with a new key that is never stored in this repository, so the repository does not ship a 2.0 APK. The new signature cannot replace the old debug-signed app. Do not publish a release until the owner agrees to uninstall or force-stop the old app once. Pending saves on the phone do not move; the computer ledger stays. Do not run both apps at once.
 
-**After changing Wi-Fi:** while the PC receiver and phone service are running, the PC searches for the paired phone every 10 seconds. When both devices return to a Wi-Fi network where they can reach each other, the address is refreshed and pending saves are sent automatically. Opening the phone home page or tapping “重新检查” starts a real receiver check that finishes within 10 seconds. Background retries keep the completed result visible instead of showing an endless reconnect message. Update both the phone app and PC skill to 1.13 to use receiver confirmation. If it remains offline, ask your AI tool to “reconnect Cat Diao”; if needed, copy the current address from “⋯ → 小窝连接” in the phone app and give it to the AI tool.
+Connect the phone and PC to the same trusted Wi-Fi. Pairing shows the same 6-digit code on the phone and on the PC; approve only when they match. Saving needs no extra permission. Seeing and tapping the screen is real-device checking and does not replace ADB. Traffic on the LAN is plaintext.
+
+**After changing Wi-Fi:** while the PC receiver and phone service are running, the PC searches for the paired phone every 10 seconds. When both devices return to a Wi-Fi network where they can reach each other, the address is refreshed and pending saves are sent automatically. Opening the phone home page or tapping “重新检查” starts a real receiver check that finishes within 10 seconds. Background retries keep the completed result visible instead of showing an endless reconnect message. Version 2.0 retries from about 10 seconds up to 60 seconds, and the phone app and PC skill must both be 2.0. If it remains offline, ask your AI tool to “reconnect Cat Diao”; if needed, copy the current address from the phone’s first-connection screen and give it to the AI tool.
 
 ### What it does
 
@@ -101,3 +105,9 @@ Run `tests/run.ps1` for regression checks. It uses temporary data and local test
 ## License / 许可
 
 [MIT License](LICENSE). Runtime data, credentials, received files, and signing keys are not included in this repository. / 仓库不含运行数据、凭据、接收的文件或签名密钥。
+
+## 1.14 蓝牙备用连接 / Bluetooth fallback
+
+换网络后，可以用蓝牙自动找回地址；Wi-Fi 不通时也能补送收藏中的链接和文字。手机与电脑两端需一起更新，保留原有猫叼配对，再在系统设置里完成一次蓝牙配对。首页提示已简化，文件、屏幕和直接发送剪贴板仍通过 Wi-Fi。已在当前手机与电脑验证蓝牙连接；Wi-Fi 关闭后的收藏补送仍需单独验收。[使用与验证说明](docs/bluetooth-1.14.md)。
+
+Version 1.14 adds Bluetooth address recovery and saved link/text delivery when Wi-Fi is unavailable. Update both components, keep the existing app pairing, and pair the devices once in system Bluetooth settings. Files, screen control and direct clipboard transfers still use Wi-Fi. Bluetooth connection has been verified on the current phone and PC. Save delivery with Wi-Fi turned off still requires a separate hardware check.

@@ -3,6 +3,7 @@ package com.ewan.wallpaperbridge;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.BindException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -122,16 +123,33 @@ final class LocalBridgeServer implements AutoCloseable {
     synchronized void start() throws IOException {
         if (closed) return;
         if (server == null || server.isClosed()) {
-            ServerSocket opened = new ServerSocket();
-            try {
-                opened.setReuseAddress(true);
-                opened.bind(new InetSocketAddress(port));
-            } catch (IOException error) {
-                opened.close();
-                throw error;
+            BindException occupied = null;
+            ServerSocket opened = null;
+            for (int attempt = 0; attempt < 8; attempt++) {
+                opened = new ServerSocket();
+                try {
+                    opened.setReuseAddress(true);
+                    opened.bind(new InetSocketAddress(port));
+                    occupied = null;
+                    break;
+                } catch (BindException error) {
+                    occupied = error;
+                    opened.close();
+                    opened = null;
+                    try { Thread.sleep(25L * (attempt + 1)); }
+                    catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw error;
+                    }
+                } catch (IOException error) {
+                    opened.close();
+                    throw error;
+                }
             }
-            server = opened;
-            Thread accept = new Thread(() -> accept(opened), "phone-bridge-server");
+            if (occupied != null || opened == null) throw occupied;
+            final ServerSocket bound = opened;
+            server = bound;
+            Thread accept = new Thread(() -> accept(bound), "phone-bridge-server");
             accept.setDaemon(true);
             accept.start();
         }
@@ -181,8 +199,7 @@ final class LocalBridgeServer implements AutoCloseable {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 try { owned.receive(packet); }
                 catch (SocketTimeoutException ignored) { continue; }
-                if (!isRunning() || (!packet.getAddress().isSiteLocalAddress()
-                        && !packet.getAddress().isLoopbackAddress())) continue;
+                if (!isRunning() || !LanPolicy.allows(packet.getAddress())) continue;
                 String message = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.US_ASCII);
                 if (!message.equals("PHONE_BRIDGE_DISCOVER_V1")) continue;
                 byte[] answer = "PHONE_BRIDGE_V1:8767".getBytes(StandardCharsets.US_ASCII);

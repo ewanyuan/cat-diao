@@ -1,11 +1,22 @@
-﻿param([switch]$Restart)
+﻿param(
+    [switch]$Restart,
+    [string]$NestDir = ''
+)
 
 $ErrorActionPreference = 'Stop'
-$dataHome = Join-Path $env:LOCALAPPDATA '猫叼小窝'
-$python = Join-Path $dataHome 'runtime/Scripts/python.exe'
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $PSScriptRoot 'nest_home.ps1')
+if ($NestDir) {
+    Save-CatDiaoNestDir -NestDir $NestDir
+    $env:CATDIAO_NEST_HOME = $NestDir
+}
+$dataHome = Resolve-CatDiaoNest -RepoRoot $repoRoot
+$inRepo = (Test-Path -LiteralPath (Join-Path $repoRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $repoRoot 'data') -PathType Container)
+if ($inRepo) { $runtime = Join-Path $repoRoot '.venv' } else { $runtime = Join-Path $dataHome 'runtime' }
+$python = Join-Path $runtime 'Scripts/python.exe'
 $receiver = Join-Path $PSScriptRoot '收藏同步.py'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-    throw 'Cat Diao runtime is missing. Run setup.ps1 first.'
+    throw ('Cat Diao runtime is missing at ' + $python + '. Run setup.ps1 first.')
 }
 try {
     $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8793/health' -TimeoutSec 2
@@ -41,9 +52,17 @@ if ($listener) {
 }
 $logs = Join-Path $dataHome 'logs'
 New-Item -ItemType Directory -Path $logs -Force | Out-Null
+# Start-Process can only overwrite its log files, so first append the previous run to a history log.
+foreach ($name in @('receiver.log', 'receiver-error.log')) {
+    $current = Join-Path $logs $name
+    if ((Test-Path -LiteralPath $current -PathType Leaf) -and (Get-Item -LiteralPath $current).Length -gt 0) {
+        $history = [IO.File]::Open((Join-Path $logs ($name -replace '\.log$', '-history.log')), 'Append', 'Write')
+        try { $bytes = [IO.File]::ReadAllBytes($current); $history.Write($bytes, 0, $bytes.Length) } finally { $history.Close() }
+    }
+}
 $env:CATDIAO_NEST_HOME = $dataHome
 $env:PYTHONUNBUFFERED = '1'
-$launched = Start-Process -FilePath $python -ArgumentList ('"' + $receiver + '" listen') `
+$launched = Start-Process -FilePath $python -ArgumentList ('"' + $receiver + '" --nest "' + $dataHome + '" listen') `
     -WorkingDirectory $PSScriptRoot -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $logs 'receiver.log') `
     -RedirectStandardError (Join-Path $logs 'receiver-error.log') -PassThru

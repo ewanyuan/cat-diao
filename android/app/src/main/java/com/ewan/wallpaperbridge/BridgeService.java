@@ -18,7 +18,13 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.Uri;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Environment;
@@ -78,6 +84,61 @@ public class BridgeService extends Service {
     private Thread captureWorker;
     private volatile ComputerConnection computerConnection;
     private volatile ComputerConnection.Attempt captureAttempt;
+    private volatile BluetoothLink bluetooth;
+    private final RequestAuth.NonceWindow nonces = new RequestAuth.NonceWindow();
+    private final ThreadLocal<String> claimedBody = new ThreadLocal<>();
+    private final ThreadLocal<String> requestNonce = new ThreadLocal<>();
+    private final ThreadLocal<String> requestToken = new ThreadLocal<>();
+    private ConnectivityManager.NetworkCallback networkCallback;
+
+    static boolean bluetoothOnline() {
+        BridgeService service = active;
+        return service != null && service.bluetooth != null && service.bluetooth.online();
+    }
+
+    static String bluetoothState() {
+        BridgeService service = active;
+        return service == null || service.bluetooth == null ? "starting" : service.bluetooth.state();
+    }
+
+    static boolean wifiOnline(Context context) {
+        long seen = context.getSharedPreferences("bridge", MODE_PRIVATE).getLong("wifi_last_seen_at", 0);
+        return seen > 0 && System.currentTimeMillis() - seen < 20000;
+    }
+
+    private void startBluetooth() {
+        if (bluetooth == null) bluetooth = new BluetoothLink(this, new BluetoothLink.Host() {
+            public String token() { return preferences.getString("computer_token", ""); }
+            public boolean wifiOnline() { return BridgeService.wifiOnline(BridgeService.this); }
+            public JSONArray pending() throws Exception {
+                try (CaptureStore store = new CaptureStore(BridgeService.this)) {
+                    JSONArray items = store.pending(20);
+                    CaptureBatch batch = new CaptureBatch();
+                    JSONArray result = new JSONArray();
+                    for (int i = 0; i < items.length(); i++) {
+                        if (!batch.add(items.getJSONObject(i).toString())) break;
+                        result.put(items.getJSONObject(i));
+                    }
+                    return result;
+                }
+            }
+            public void acknowledge(JSONArray ids) throws Exception {
+                try (CaptureStore store = new CaptureStore(BridgeService.this)) { store.acknowledge(ids); }
+                preferences.edit().remove("capture_sync_error")
+                        .putLong("capture_sync_last_success_at", System.currentTimeMillis()).apply();
+            }
+            public void address(String address) {
+                if (!address.equals(preferences.getString("computer_address", ""))) {
+                    preferences.edit().putString("computer_address", address).apply();
+                    ComputerConnection check = computerConnection;
+                    if (check != null) check.request(false);
+                    requestCaptureSync();
+                }
+            }
+            public void changed() { for (Runnable listener : connectionListeners) listener.run(); }
+        });
+        bluetooth.start();
+    }
 
     public static PairingGate.Request pendingPair() { return pairing.pending(); }
 
@@ -100,9 +161,16 @@ public class BridgeService extends Service {
     private synchronized void startConnectionChecks() {
         if (destroyed || active != this || computerConnection != null
                 || preferences.getString("computer_token", "").isEmpty()) return;
-        computerConnection = new ComputerConnection(attempt -> ComputerConnection.probe(
-                preferences.getString("computer_address", ""), 8793,
-                preferences.getString("computer_token", ""), attempt), snapshot -> {
+        computerConnection = new ComputerConnection(attempt -> {
+            try {
+                ComputerConnection.probe(preferences.getString("computer_address", ""), 8793,
+                        preferences.getString("computer_token", ""), attempt);
+                preferences.edit().putLong("wifi_last_seen_at", System.currentTimeMillis()).apply();
+            } catch (Exception error) {
+                preferences.edit().remove("wifi_last_seen_at").apply();
+                if (!bluetoothOnline()) throw error;
+            }
+        }, snapshot -> {
             if (snapshot.phase == ComputerConnection.Phase.CONNECTED) {
                 preferences.edit().putLong("computer_receiver_last_seen_at", snapshot.finishedAt).apply();
                 requestCaptureSync();
@@ -178,6 +246,8 @@ public class BridgeService extends Service {
         BridgeService service = active;
         if (service != null) {
             service.stopConnectionChecks();
+            if (service.bluetooth != null) service.bluetooth.disconnect();
+            service.preferences.edit().remove("wifi_last_seen_at").apply();
             ComputerConnection.Attempt attempt = service.captureAttempt;
             if (attempt != null) attempt.cancel();
             LocalBridgeServer server = service.localServer;
@@ -205,14 +275,36 @@ public class BridgeService extends Service {
             if (!destroyed && active == this) showNotification("连接未开启，请重新打开应用");
         });
         startServer();
+        advertise();
         updateOverlay();
         captureWorker = new Thread(this::captureSyncLoop, "phone-capture-sync");
         captureWorker.start();
         startConnectionChecks();
+        startBluetooth();
+        watchNetwork();
+    }
+
+    private void watchNetwork() {
+        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+        if (manager == null || networkCallback != null) return;
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .build();
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network network) {
+                ComputerConnection check = computerConnection;
+                if (check != null) check.networkReady();
+                requestCaptureSync();
+            }
+        };
+        try { manager.registerNetworkCallback(request, networkCallback); }
+        catch (RuntimeException ignored) { networkCallback = null; }
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         startServer();
+        advertise();
+        startBluetooth();
         if (intent != null && ACTION_CHECK_CONNECTION.equals(intent.getAction())) {
             startConnectionChecks();
             ComputerConnection check = computerConnection;
@@ -223,8 +315,15 @@ public class BridgeService extends Service {
 
     @Override public void onDestroy() {
         destroyed = true;
+        if (bluetooth != null) bluetooth.close();
+        ConnectivityManager manager = getSystemService(ConnectivityManager.class);
+        if (manager != null && networkCallback != null) {
+            try { manager.unregisterNetworkCallback(networkCallback); } catch (RuntimeException ignored) { }
+            networkCallback = null;
+        }
         stopConnectionChecks();
         LocalBridgeServer server = localServer;
+        stopAdvertising();
         if (server != null) server.close();
         ComputerConnection.Attempt attempt = captureAttempt;
         if (attempt != null) attempt.cancel();
@@ -341,7 +440,7 @@ public class BridgeService extends Service {
             try {
                 if (destroyed || active != this) throw new IOException("手机服务已停止");
                 ComputerConnection.Reply response = ComputerConnection.exchange(address, 8793, "POST", "/captures",
-                        "X-Phone-Token", token, payload, attempt);
+                        token, payload, attempt);
                 if (response.code != 200) {
                     throw new ComputerConnection.CheckFailure(response.code == 403
                             ? "电脑没有确认当前配对，请查看「小窝连接」。"
@@ -359,6 +458,7 @@ public class BridgeService extends Service {
                 if (destroyed || active != this || !token.equals(preferences.getString("computer_token", ""))) return false;
                 store.acknowledge(accepted);
                 preferences.edit().remove("capture_sync_error")
+                        .putLong("wifi_last_seen_at", System.currentTimeMillis())
                         .putLong("capture_sync_last_success_at", System.currentTimeMillis()).apply();
                 return store.pendingCount() > 0;
             } finally {
@@ -373,14 +473,63 @@ public class BridgeService extends Service {
         Intent intent = new Intent(this, MainActivity.class);
         PendingIntent open = PendingIntent.getActivity(this, 47, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        boolean paused = preferences.getBoolean("remote_paused", false);
+        Intent toggle = new Intent(this, RemotePauseReceiver.class);
+        PendingIntent pause = PendingIntent.getBroadcast(this, 49, toggle,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        String actionLabel = paused ? PermissionGuide.RESUME_REMOTE : PermissionGuide.PAUSE_REMOTE;
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(getResources().getIdentifier("cat_paw_notification", "drawable", getPackageName()))
                 .setContentTitle("猫叼").setContentText(message)
-                .setContentIntent(open).setOngoing(true).build();
+                .setContentIntent(open)
+                .addAction(new Notification.Action.Builder(null, actionLabel, pause).build())
+                .setOngoing(true).build();
+    }
+
+    public static void toggleRemotePause(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("bridge", MODE_PRIVATE);
+        boolean paused = !prefs.getBoolean("remote_paused", false);
+        prefs.edit().putBoolean("remote_paused", paused).apply();
+        BridgeService service = active;
+        if (service != null) service.showNotification(paused ? "遥控已暂停，收藏仍会送达" : "遥控已恢复");
     }
 
     private void showNotification(String message) {
         getSystemService(NotificationManager.class).notify(47, notification(message));
+    }
+
+    private NsdManager.RegistrationListener nsdListener;
+
+    private void advertise() {
+        if (destroyed || nsdListener != null) return;
+        try {
+            NsdManager manager = (NsdManager) getSystemService(NSD_SERVICE);
+            if (manager == null) return;
+            NsdServiceInfo info = new NsdServiceInfo();
+            info.setServiceName("catdiao");
+            info.setServiceType(FirstConnection.SERVICE_TYPE + ".");
+            info.setPort(PORT);
+            NsdManager.RegistrationListener listener = new NsdManager.RegistrationListener() {
+                @Override public void onServiceRegistered(NsdServiceInfo registered) { }
+                @Override public void onRegistrationFailed(NsdServiceInfo service, int error) { nsdListener = null; }
+                @Override public void onServiceUnregistered(NsdServiceInfo service) { nsdListener = null; }
+                @Override public void onUnregistrationFailed(NsdServiceInfo service, int error) { }
+            };
+            nsdListener = listener;
+            manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener);
+        } catch (RuntimeException ignored) {
+            nsdListener = null;
+        }
+    }
+
+    private void stopAdvertising() {
+        NsdManager.RegistrationListener listener = nsdListener;
+        nsdListener = null;
+        if (listener == null) return;
+        try {
+            NsdManager manager = (NsdManager) getSystemService(NSD_SERVICE);
+            if (manager != null) manager.unregisterService(listener);
+        } catch (RuntimeException ignored) { }
     }
 
     private void startServer() {
@@ -391,7 +540,7 @@ public class BridgeService extends Service {
     }
 
     private boolean isLocal(InetAddress address) {
-        return address.isSiteLocalAddress() || address.isLoopbackAddress();
+        return LanPolicy.allows(address);
     }
 
     private void handleClient(LocalBridgeServer.Client session) throws Exception {
@@ -406,6 +555,10 @@ public class BridgeService extends Service {
                 json(client.getOutputStream(), 500, new JSONObject().put("error", "手机处理请求失败：" +
                         (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage())));
             } catch (Exception ignored) { }
+        } finally {
+            claimedBody.remove();
+            requestNonce.remove();
+            requestToken.remove();
         }
     }
 
@@ -436,8 +589,12 @@ public class BridgeService extends Service {
 
         if (method.equals("GET") && path.equals("/hello")) {
             JSONObject result = new JSONObject().put("name", "猫叼")
-                    .put("version", "1.13").put("paired", !preferences.getString("computer_token", "").isEmpty())
+                    .put("version", "2.0").put("paired", !preferences.getString("computer_token", "").isEmpty())
+                    .put("protocol", "dh-2048-v1")
                     .put("setup_complete", setupComplete())
+                    .put("screen_control_enabled", PhoneAccessibilityService.isEnabled(this))
+                    .put("overlay_allowed", Settings.canDrawOverlays(this))
+                    .put("brightness_control_allowed", Settings.System.canWrite(this))
                     .put("model", Build.MODEL);
             json(output, 200, result); return;
         }
@@ -446,21 +603,42 @@ public class BridgeService extends Service {
             JSONObject body = readJson(input, (int) length);
             session.bodyReceived();
             String name = body.optString("name", "小窝").trim();
-            String token = body.optString("token", "");
-            if (name.length() < 1 || name.length() > 60 || !token.matches("[a-fA-F0-9]{64}")) {
+            String peerPublic = body.optString("public_key", "").trim().toLowerCase(Locale.ROOT);
+            if (name.length() < 1 || name.length() > 60 || !PairingExchange.validPublic(peerPublic)) {
                 json(output, 400, new JSONObject().put("error", "连接请求无效")); return;
+            }
+            if (body.has("token")) {
+                json(output, 400, new JSONObject().put("error", "请使用 2.0 配对，不要发送令牌")); return;
             }
             if (!preferences.getString("computer_token", "").isEmpty()) {
                 json(output, 409, new JSONObject().put("error", "已有小窝连接；如需更换，请在猫叼的「小窝连接」中移除")); return;
             }
-            PairingGate.Request pair = pairing.offer(name, client.getInetAddress().getHostAddress(), token,
+            String remoteAddress = client.getInetAddress().getHostAddress();
+            PairingGate.Request existing = pairing.pending();
+            if (existing != null && name.equals(existing.name) && remoteAddress.equals(existing.address)
+                    && peerPublic.equals(existing.peerPublic)) {
+                json(output, 202, new JSONObject().put("id", existing.id).put("state", "pending")
+                        .put("public_key", existing.phonePublic));
+                return;
+            }
+            PairingExchange.KeyPair local = PairingExchange.generate();
+            byte[] shared;
+            try { shared = PairingExchange.sharedSecret(local.privateHex, peerPublic); }
+            catch (IllegalArgumentException error) {
+                json(output, 400, new JSONObject().put("error", "连接请求无效")); return;
+            }
+            String token = PairingExchange.token(shared);
+            String code = PairingExchange.confirmCode(shared);
+            PairingGate.Request pair = pairing.offer(name, remoteAddress, token, code, peerPublic, local.publicHex,
                     () -> !preferences.getString("computer_token", "").isEmpty());
             if (pair == null) {
                 json(output, 409, new JSONObject().put("error", "已有小窝连接或连接请求，请先在猫叼处理"));
                 return;
             }
-            showNotification("打开猫叼确认小窝连接：" + name);
-            json(output, 202, new JSONObject().put("id", pair.id).put("state", "pending")); return;
+            showNotification("打开猫叼核对数字并确认：" + name);
+            json(output, 202, new JSONObject().put("id", pair.id).put("state", "pending")
+                    .put("public_key", pair.phonePublic));
+            return;
         }
         if (method.equals("GET") && path.startsWith("/pair-status?id=")) {
             String id = path.substring("/pair-status?id=".length());
@@ -471,9 +649,18 @@ public class BridgeService extends Service {
             json(output, 200, new JSONObject().put("state", state)); return;
         }
         String expected = preferences.getString("computer_token", "");
-        String supplied = headers.getOrDefault("x-phone-token", "");
-        if (expected.isEmpty() || !constantTimeEquals(expected, supplied)) {
+        RequestAuth.Verdict verdict = RequestAuth.verify(method, path, expected, null, false,
+                headers.get("x-catdiao-ts"), headers.get("x-catdiao-nonce"),
+                headers.get("x-catdiao-body"), headers.get("x-catdiao-sig"),
+                System.currentTimeMillis() / 1000L, nonces);
+        if (!verdict.ok) {
             json(output, 401, new JSONObject().put("error", "请先在猫叼连接小窝")); return;
+        }
+        claimedBody.set(verdict.bodyHash);
+        requestNonce.set(verdict.nonce);
+        requestToken.set(expected);
+        if (length == 0 && !RequestAuth.bodyHash(null).equals(verdict.bodyHash)) {
+            json(output, 400, new JSONObject().put("error", "请求正文与签名不一致")); return;
         }
         preferences.edit().putLong("computer_last_seen_at", System.currentTimeMillis()).apply();
         String currentComputerAddress = client.getInetAddress().getHostAddress();
@@ -483,15 +670,14 @@ public class BridgeService extends Service {
             ComputerConnection check = computerConnection;
             if (check != null) check.request(false);
         }
+        if (RoutePolicy.pausesWithRemote(method, path) && preferences.getBoolean("remote_paused", false)) {
+            json(output, 423, new JSONObject().put("error", "遥控已暂停。在猫叼通知里点「恢复遥控」。")); return;
+        }
         if (method.equals("GET") && path.equals("/heartbeat")) {
             requestCaptureSync();
             json(output, 200, new JSONObject().put("connected", true)); return;
         }
         if (method.equals("GET") && path.equals("/status")) { json(output, 200, status()); return; }
-        if (!setupComplete()) {
-            json(output, 428, new JSONObject().put("error",
-                    "小窝连接设置未完成；请打开猫叼继续设置")); return;
-        }
         if (method.equals("GET") && path.equals("/apps")) { json(output, 200, apps()); return; }
         if (method.equals("GET") && path.equals("/screen")) { screenshot(output); return; }
         if (method.equals("GET") && path.equals("/shared-file")) { sharedFile(output); return; }
@@ -501,7 +687,7 @@ public class BridgeService extends Service {
             }
             JSONObject body = readJson(input, (int) length);
             session.bodyReceived();
-            if (!constantTimeEquals(preferences.getString("computer_token", ""), supplied)) {
+            if (!expected.equals(preferences.getString("computer_token", ""))) {
                 json(output, 401, new JSONObject().put("error", "这台小窝的连接已移除")); return;
             }
             Object value = body.opt("text");
@@ -528,7 +714,7 @@ public class BridgeService extends Service {
         }
         JSONObject body = readJson(input, (int) length);
         session.bodyReceived();
-        if (!constantTimeEquals(preferences.getString("computer_token", ""), supplied)) {
+        if (!expected.equals(preferences.getString("computer_token", ""))) {
             json(output, 401, new JSONObject().put("error", "这台小窝的连接已移除")); return;
         }
         if (path.equals("/volume")) { setVolume(output, body); return; }
@@ -553,6 +739,9 @@ public class BridgeService extends Service {
     private JSONObject readJson(InputStream input, int length) throws Exception {
         byte[] bytes = new byte[length];
         readFully(input, bytes);
+        String claimed = claimedBody.get();
+        if (claimed != null && !claimed.isEmpty() && !RequestAuth.bodyHash(bytes).equals(claimed))
+            throw new IOException("正文与签名不一致");
         return new JSONObject(new String(bytes, StandardCharsets.UTF_8));
     }
 
@@ -571,6 +760,10 @@ public class BridgeService extends Service {
         }
         byte[] data = new byte[length];
         readFully(input, data);
+        String claimed = claimedBody.get();
+        if (claimed != null && !claimed.isEmpty() && !RequestAuth.bodyHash(data).equals(claimed)) {
+            json(output, 400, new JSONObject().put("error", "图片与签名不一致")); return;
+        }
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(data, 0, data.length, bounds);
@@ -667,6 +860,8 @@ public class BridgeService extends Service {
                 .put("computer_retry_started_at", check.attemptStartedAt)
                 .put("computer_retry_remaining_ms", check.remainingMs())
                 .put("computer_address", preferences.getString("computer_address", ""))
+                .put("connection_transport", wifiOnline(this) ? "wifi" : bluetoothOnline() ? "bluetooth" : "offline")
+                .put("bluetooth_state", bluetoothState())
                 .put("shared_file_selected", !preferences.getString("shared_uri", "").isEmpty());
     }
 
@@ -715,6 +910,14 @@ public class BridgeService extends Service {
         Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
         if (launch == null) { json(output, 404, new JSONObject().put("error", "找不到可打开的应用")); return; }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
+        if (accessibility != null) {
+            try {
+                accessibility.startActivity(launch);
+                json(output, 200, new JSONObject().put("state", "opened"));
+                return;
+            } catch (RuntimeException ignored) { }
+        }
         if (MainActivity.isVisible()) {
             startActivity(launch);
             json(output, 200, new JSONObject().put("state", "opened"));
@@ -751,7 +954,7 @@ public class BridgeService extends Service {
         if (accessibility == null) {
             json(output, 403, new JSONObject().put("error", "请在手机上开启「猫叼」屏幕控制")); return;
         }
-        byte[] jpeg = accessibility.screenshot();
+        byte[] jpeg = Build.VERSION.SDK_INT >= 30 ? accessibility.screenshot() : null;
         if (jpeg == null) {
             json(output, 503, new JSONObject().put("error", "截图暂不可用；锁屏或受保护的页面可能禁止截图")); return;
         }
@@ -779,6 +982,9 @@ public class BridgeService extends Service {
         values.put(MediaStore.Downloads.IS_PENDING, 1);
         Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
         if (uri == null) { json(output, 500, new JSONObject().put("error", "手机无法创建文件")); return; }
+        java.security.MessageDigest digest;
+        try { digest = java.security.MessageDigest.getInstance("SHA-256"); }
+        catch (Exception error) { throw new IOException("无法校验文件"); }
         try (OutputStream file = getContentResolver().openOutputStream(uri)) {
             if (file == null) throw new IOException("手机无法写入文件");
             byte[] buffer = new byte[65536];
@@ -786,12 +992,19 @@ public class BridgeService extends Service {
             while (remaining > 0) {
                 int count = input.read(buffer, 0, (int) Math.min(buffer.length, remaining));
                 if (count < 0) throw new IOException("传输中断");
+                digest.update(buffer, 0, count);
                 file.write(buffer, 0, count);
                 remaining -= count;
             }
         } catch (Exception error) {
             getContentResolver().delete(uri, null, null);
             throw error;
+        }
+        String claimed = claimedBody.get();
+        String actual = hex(digest.digest());
+        if (claimed != null && !claimed.isEmpty() && !claimed.equals(actual)) {
+            getContentResolver().delete(uri, null, null);
+            json(output, 400, new JSONObject().put("error", "文件与签名不一致")); return;
         }
         values.clear(); values.put(MediaStore.Downloads.IS_PENDING, 0);
         getContentResolver().update(uri, values, null, null);
@@ -834,10 +1047,22 @@ public class BridgeService extends Service {
     private void respond(OutputStream output, int status, String message, String type, byte[] data) throws IOException {
         byte[] body = data == null ? message.getBytes(StandardCharsets.UTF_8) : data;
         String reason = status < 300 ? "OK" : "Error";
+        String nonce = requestNonce.get();
+        String token = requestToken.get();
+        String signature = "";
+        if (nonce != null && token != null && !nonce.isEmpty() && !token.isEmpty()) {
+            signature = "X-CatDiao-Sig: " + RequestAuth.signResponse(token, nonce, status, body) + "\r\n";
+        }
         String headers = "HTTP/1.1 " + status + " " + reason + "\r\n" +
-                "Content-Type: " + type + "\r\nContent-Length: " + body.length +
-                "\r\nConnection: close\r\n\r\n";
+                "Content-Type: " + type + "\r\nContent-Length: " + body.length + "\r\n" +
+                signature + "Connection: close\r\n\r\n";
         output.write(headers.getBytes(StandardCharsets.US_ASCII));
         output.write(body); output.flush();
+    }
+
+    private static String hex(byte[] bytes) {
+        StringBuilder text = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) text.append(String.format(Locale.ROOT, "%02x", value & 0xff));
+        return text.toString();
     }
 }

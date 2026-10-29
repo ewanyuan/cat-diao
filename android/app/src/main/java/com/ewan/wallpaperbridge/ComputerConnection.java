@@ -7,19 +7,15 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 /** A real receiver check with a deadline independent of socket activity. */
 final class ComputerConnection implements AutoCloseable {
@@ -92,8 +88,10 @@ final class ComputerConnection implements AutoCloseable {
     private final Probe probe;
     private final Listener listener;
     private final long timeoutMs;
+    private final ReconnectSchedule backoff;
     private final ScheduledExecutorService timers;
     private final ExecutorService worker;
+    private ScheduledFuture<?> retryTask;
     private Snapshot result = new Snapshot(Phase.IDLE, 0, 0, 0, "", false);
     private Attempt active;
     private boolean closed;
@@ -114,7 +112,24 @@ final class ComputerConnection implements AutoCloseable {
         };
         timers = Executors.newScheduledThreadPool(2, threads);
         worker = Executors.newSingleThreadExecutor(threads);
-        timers.scheduleWithFixedDelay(() -> request(false), retryMs, retryMs, TimeUnit.MILLISECONDS);
+        backoff = new ReconnectSchedule(retryMs, Math.max(retryMs, 60000));
+        armRetry();
+    }
+
+    private void armRetry() {
+        synchronized (this) {
+            if (closed) return;
+            retryTask = timers.schedule(() -> {
+                request(false);
+                armRetry();
+            }, backoff.currentMs(), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    synchronized void networkReady() {
+        if (closed) return;
+        backoff.success();
+        request(false);
     }
 
     synchronized Snapshot snapshot() {
@@ -166,6 +181,8 @@ final class ComputerConnection implements AutoCloseable {
         }
         active = null;
         if (attempt.watchdog != null) attempt.watchdog.cancel(false);
+        if (connected) backoff.success();
+        else backoff.failure();
         result = new Snapshot(connected ? Phase.CONNECTED : Phase.FAILED,
                 attempt.startedAt, System.currentTimeMillis(), 0, error, false);
         listener.changed(snapshot());
@@ -209,39 +226,38 @@ final class ComputerConnection implements AutoCloseable {
         if (address.isEmpty() || token.isEmpty()) {
             throw new CheckFailure("还没有可用的电脑连接信息，请查看「小窝连接」。");
         }
-        String challenge = UUID.randomUUID().toString().replace("-", "");
-        Reply reply = exchange(address, port, "GET", "/connection-check?challenge=" + challenge,
-                "X-CatDiao-Auth", proof(token, "request:" + challenge), null, attempt);
+        Reply reply = exchange(address, port, "GET", "/connection-check", token, null, attempt);
         if (reply.code == 404) throw new CheckFailure("电脑接收程序需要更新，才能确认本次连接。");
-        if (reply.code == 403) throw new CheckFailure("电脑没有确认当前配对，请查看「小窝连接」。");
+        if (reply.code == 401 || reply.code == 403) throw new CheckFailure("电脑没有确认当前配对，请查看「小窝连接」。");
         if (reply.code != 200) throw new CheckFailure("电脑返回了 HTTP " + reply.code + "，本次没有连上。");
-        String responseProof = reply.headers.get("x-catdiao-proof");
-        if (responseProof == null || !MessageDigest.isEqual(
-                proof(token, "response:" + challenge).getBytes(StandardCharsets.US_ASCII),
-                responseProof.getBytes(StandardCharsets.US_ASCII))) {
-            throw new CheckFailure("电脑没有返回有效的配对确认，本次没有连上。");
-        }
         attempt.timeout(1);
     }
 
     static Reply exchange(String address, int port, String method, String path,
-                          String authName, String authValue, byte[] payload, Attempt attempt) throws Exception {
+                          String token, byte[] payload, Attempt attempt) throws Exception {
         if (!address.matches("[0-9.]+")) throw new CheckFailure("电脑连接地址不可用。");
         InetAddress peer = InetAddress.getByName(address);
-        if (!peer.isSiteLocalAddress() && !peer.isLoopbackAddress()) {
+        if (!LanPolicy.allows(peer)) {
             throw new CheckFailure("电脑连接地址不在局域网内。");
         }
         Socket socket = new Socket();
         attempt.socket = socket;
         try {
             socket.connect(new InetSocketAddress(peer, port), attempt.timeout(3000));
-            String request = method + " " + path + " HTTP/1.1\r\n" +
-                    "Host: " + address + ":" + port + "\r\n" +
-                    authName + ": " + authValue + "\r\n" +
-                    (payload == null ? "" : "Content-Type: application/json; charset=utf-8\r\n" +
-                            "Content-Length: " + payload.length + "\r\n") +
-                    "Connection: close\r\n\r\n";
-            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            RequestAuth.Signed signed = RequestAuth.sign(method, path, token, payload,
+                    System.currentTimeMillis() / 1000L);
+            StringBuilder request = new StringBuilder();
+            request.append(method).append(' ').append(path).append(" HTTP/1.1\r\n");
+            request.append("Host: ").append(address).append(':').append(port).append("\r\n");
+            for (Map.Entry<String, String> field : signed.headers.entrySet()) {
+                request.append(field.getKey()).append(": ").append(field.getValue()).append("\r\n");
+            }
+            if (payload != null) {
+                request.append("Content-Type: application/json; charset=utf-8\r\n");
+                request.append("Content-Length: ").append(payload.length).append("\r\n");
+            }
+            request.append("Connection: close\r\n\r\n");
+            socket.getOutputStream().write(request.toString().getBytes(StandardCharsets.US_ASCII));
             if (payload != null) socket.getOutputStream().write(payload);
             socket.getOutputStream().flush();
             String[] headers = readHeaders(socket, attempt).split("\r\n");
@@ -258,20 +274,24 @@ final class ComputerConnection implements AutoCloseable {
                         headers[index].substring(colon + 1).trim());
             }
             byte[] body = new byte[0];
-            if (payload != null && code == 200) {
+            if (fields.containsKey("content-length")) {
                 int expected;
                 try { expected = Integer.parseInt(fields.get("content-length")); }
-                catch (NumberFormatException error) { throw new CheckFailure("电脑没有返回完整的收藏确认。"); }
-                if (expected < 0 || expected > 65536) throw new CheckFailure("电脑返回的收藏确认大小不正确。");
+                catch (NumberFormatException error) { throw new CheckFailure("电脑没有返回完整的确认。"); }
+                if (expected < 0 || expected > 65536) throw new CheckFailure("电脑返回的确认大小不正确。");
                 body = new byte[expected];
                 int received = 0;
                 InputStream input = socket.getInputStream();
                 while (received < expected) {
                     socket.setSoTimeout(attempt.timeout(6000));
                     int count = input.read(body, received, expected - received);
-                    if (count < 0) throw new CheckFailure("电脑的收藏确认没有传完，请稍后重试。");
+                    if (count < 0) throw new CheckFailure("电脑的确认没有传完，请稍后重试。");
                     received += count;
                 }
+            }
+            if (code >= 200 && code < 300 && !RequestAuth.responseOk(
+                    token, signed.nonce, code, body, fields.get("x-catdiao-sig"))) {
+                throw new CheckFailure("电脑没有返回有效的配对确认，本次没有连上。");
             }
             attempt.timeout(1);
             return new Reply(code, fields, body);
@@ -295,14 +315,5 @@ final class ComputerConnection implements AutoCloseable {
             if (ending == 0x0d0a0d0a) return new String(bytes.toByteArray(), StandardCharsets.US_ASCII);
         }
         throw new CheckFailure("电脑返回的连接确认过长，本次没有连上。");
-    }
-
-    private static String proof(String token, String message) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(token.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        byte[] bytes = mac.doFinal(message.getBytes(StandardCharsets.US_ASCII));
-        StringBuilder text = new StringBuilder();
-        for (byte value : bytes) text.append(String.format(java.util.Locale.ROOT, "%02x", value & 0xff));
-        return text.toString();
     }
 }
