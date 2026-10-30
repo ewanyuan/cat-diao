@@ -630,7 +630,9 @@ public class BridgeService extends Service {
                     .put("screen_control_enabled", PhoneAccessibilityService.isEnabled(this))
                     .put("overlay_allowed", Settings.canDrawOverlays(this))
                     .put("brightness_control_allowed", Settings.System.canWrite(this))
-                    .put("model", Build.MODEL);
+                    .put("model", Build.MODEL)
+                    .put("version_code", BuildConfig.VERSION_CODE)
+                    .put("build_commit", BuildConfig.GIT_COMMIT);
             json(output, 200, result); return;
         }
         if (method.equals("POST") && path.equals("/pair")) {
@@ -715,6 +717,7 @@ public class BridgeService extends Service {
         if (method.equals("GET") && path.equals("/status")) { json(output, 200, status()); return; }
         if (method.equals("GET") && path.equals("/apps")) { json(output, 200, apps()); return; }
         if (method.equals("GET") && path.equals("/screen")) { screenshot(output); return; }
+        if (method.equals("GET") && path.equals("/ui")) { uiTree(output); return; }
         if (method.equals("GET") && path.equals("/shared-file")) { sharedFile(output); return; }
         if (method.equals("POST") && path.equals("/clipboard")) {
             if (length > 262144) {
@@ -755,6 +758,8 @@ public class BridgeService extends Service {
         if (path.equals("/volume")) { setVolume(output, body); return; }
         if (path.equals("/brightness")) { setBrightness(output, body); return; }
         if (path.equals("/open")) { openApp(output, body); return; }
+        if (path.equals("/open-url")) { openUrl(output, body); return; }
+        if (path.equals("/install")) { installReceived(output); return; }
         if (path.equals("/action")) { action(output, body); return; }
         json(output, 404, new JSONObject().put("error", "没有这个操作"));
     }
@@ -897,7 +902,46 @@ public class BridgeService extends Service {
                 .put("computer_address", preferences.getString("computer_address", ""))
                 .put("connection_transport", wifiOnline(this) ? "wifi" : bluetoothOnline() ? "bluetooth" : "offline")
                 .put("bluetooth_state", bluetoothState())
-                .put("shared_file_selected", !preferences.getString("shared_uri", "").isEmpty());
+                .put("shared_file_selected", !preferences.getString("shared_uri", "").isEmpty())
+                .put("battery_optimization_exempt", powerExempt())
+                .put("screen_interactive", screenInteractive())
+                .put("foreground_package", PhoneAccessibilityService.foregroundPackage())
+                .put("user_idle_ms", PhoneAccessibilityService.userIdleMs())
+                .put("network", networkState())
+                .put("last_received_apk", preferences.getString("last_received_apk_name", ""))
+                .put("install_allowed", getPackageManager().canRequestPackageInstalls());
+    }
+
+    private boolean powerExempt() {
+        PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+        return power != null && power.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    private boolean screenInteractive() {
+        PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+        return power != null && power.isInteractive();
+    }
+
+    private JSONObject networkState() throws Exception {
+        JSONObject result = new JSONObject().put("vpn_active", false).put("validated", false)
+                .put("transports", new JSONArray()).put("proxy", "");
+        ConnectivityManager connectivity = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (connectivity == null) return result;
+        Network active = connectivity.getActiveNetwork();
+        NetworkCapabilities caps = active == null ? null : connectivity.getNetworkCapabilities(active);
+        if (caps != null) {
+            JSONArray transports = new JSONArray();
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) transports.put("wifi");
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) transports.put("cellular");
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) transports.put("vpn");
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) transports.put("ethernet");
+            result.put("transports", transports)
+                    .put("vpn_active", caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN))
+                    .put("validated", caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+        }
+        android.net.ProxyInfo proxy = connectivity.getDefaultProxy();
+        if (proxy != null && proxy.getHost() != null) result.put("proxy", proxy.getHost() + ":" + proxy.getPort());
+        return result;
     }
 
     private JSONArray apps() throws Exception {
@@ -975,6 +1019,27 @@ public class BridgeService extends Service {
         }
         String type = body.optString("type", "");
         boolean accepted;
+        if (type.equals("set_text")) {
+            String text = body.optString("text", "");
+            if (text.length() > 10000) { json(output, 413, new JSONObject().put("error", "文字过长")); return; }
+            int code = accessibility.setText(text);
+            if (code == PhoneAccessibilityService.SET_PASSWORD) {
+                json(output, 403, new JSONObject().put("error", "不会向密码框填写内容")); return;
+            }
+            if (code == PhoneAccessibilityService.SET_NO_FIELD) {
+                json(output, 409, new JSONObject().put("error", "当前没有获得焦点的输入框，请先点一下输入框")); return;
+            }
+            json(output, code == PhoneAccessibilityService.SET_OK ? 200 : 400,
+                    new JSONObject().put("accepted", code == PhoneAccessibilityService.SET_OK).put("type", type));
+            return;
+        }
+        if (body.optBoolean("respect_user", false)) {
+            long idle = PhoneAccessibilityService.userIdleMs();
+            if (idle >= 0 && idle < USER_ACTIVE_WINDOW_MS) {
+                json(output, 409, new JSONObject().put("error", "手机正在被使用，已暂缓操作")
+                        .put("user_idle_ms", idle)); return;
+            }
+        }
         if (type.equals("tap")) accepted = accessibility.tap(body.optInt("x", -1), body.optInt("y", -1));
         else if (type.equals("swipe")) accepted = accessibility.swipe(body.optInt("x1", -1),
                 body.optInt("y1", -1), body.optInt("x2", -1), body.optInt("y2", -1),
@@ -982,6 +1047,78 @@ public class BridgeService extends Service {
         else accepted = accessibility.global(type);
         json(output, accepted ? 200 : 400,
                 new JSONObject().put("accepted", accepted).put("type", type));
+    }
+
+    private static final long USER_ACTIVE_WINDOW_MS = 8000;
+
+    private void uiTree(OutputStream output) throws Exception {
+        PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
+        if (accessibility == null) {
+            json(output, 403, new JSONObject().put("error", "请在手机上开启「猫叼」屏幕控制")); return;
+        }
+        json(output, 200, new JSONObject().put("package", PhoneAccessibilityService.foregroundPackage())
+                .put("nodes", accessibility.uiTree()));
+    }
+
+    /** Start an activity like /open does: accessibility context, visible UI, else a notification. */
+    private int launch(Intent intent, String label) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
+        if (accessibility != null) {
+            try { accessibility.startActivity(intent); return 200; } catch (RuntimeException ignored) { }
+        }
+        if (MainActivity.isVisible()) {
+            try { startActivity(intent); return 200; } catch (RuntimeException ignored) { }
+        }
+        PendingIntent tap = PendingIntent.getActivity(this, 49, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification note = new Notification.Builder(this, CHANNEL)
+                .setSmallIcon(getResources().getIdentifier("cat_paw_notification", "drawable", getPackageName()))
+                .setContentTitle("小窝请求打开").setContentText(label)
+                .setContentIntent(tap).setAutoCancel(true).build();
+        getSystemService(NotificationManager.class).notify(49, note);
+        return 202;
+    }
+
+    private void launchReply(OutputStream output, Intent intent, String label) throws Exception {
+        int code = launch(intent, label);
+        json(output, code, new JSONObject().put("state", code == 200 ? "opened" : "tap_phone_notification"));
+    }
+
+    private void openUrl(OutputStream output, JSONObject body) throws Exception {
+        String url = body.optString("url", "");
+        if (!RoutePolicy.allowedUrl(url)) {
+            json(output, 400, new JSONObject().put("error", "只支持 http/https 网址")); return;
+        }
+        Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE);
+        String pkg = body.optString("package", "");
+        if (!pkg.isEmpty()) {
+            if (!RoutePolicy.validPackage(pkg)) {
+                json(output, 400, new JSONObject().put("error", "应用名称无效")); return;
+            }
+            view.setPackage(pkg);
+            if (view.resolveActivity(getPackageManager()) == null) {
+                json(output, 404, new JSONObject().put("error", "该应用无法打开这个网址")); return;
+            }
+        }
+        launchReply(output, view, "打开网址 " + (url.length() > 60 ? url.substring(0, 60) + "…" : url));
+    }
+
+    private void installReceived(OutputStream output) throws Exception {
+        String saved = preferences.getString("last_received_apk_uri", "");
+        if (saved.isEmpty()) {
+            json(output, 404, new JSONObject().put("error", "还没有收到 APK，请先用 send 发送")); return;
+        }
+        if (!getPackageManager().canRequestPackageInstalls()) {
+            launch(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + getPackageName())), "允许猫叼安装应用");
+            json(output, 403, new JSONObject().put("error", "请在手机上允许「猫叼」安装未知应用，然后重试")
+                    .put("state", "needs_install_permission")); return;
+        }
+        Intent install = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(Uri.parse(saved), "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        launchReply(output, install, "安装 " + preferences.getString("last_received_apk_name", "APK"));
     }
 
     private void screenshot(OutputStream output) throws Exception {
@@ -1043,6 +1180,10 @@ public class BridgeService extends Service {
         }
         values.clear(); values.put(MediaStore.Downloads.IS_PENDING, 0);
         getContentResolver().update(uri, values, null, null);
+        if (name.toLowerCase(Locale.ROOT).endsWith(".apk")) {
+            preferences.edit().putString("last_received_apk_uri", uri.toString())
+                    .putString("last_received_apk_name", name).apply();
+        }
         json(output, 200, new JSONObject().put("saved", name).put("folder", "下载/猫叼"));
     }
 

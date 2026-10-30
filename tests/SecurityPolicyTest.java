@@ -57,6 +57,16 @@ public final class SecurityPolicyTest {
         require(RoutePolicy.needsWriteSettings("POST", "/brightness"), "brightness");
         require(RoutePolicy.pausesWithRemote("POST", "/open"), "open pauses");
         require(!RoutePolicy.pausesWithRemote("GET", "/status"), "status stays");
+        require(RoutePolicy.needsScreen("GET", "/ui"), "ui needs screen");
+        require(!RoutePolicy.open("GET", "/ui"), "ui closed");
+        require(RoutePolicy.pausesWithRemote("POST", "/open-url"), "open-url pauses");
+        require(RoutePolicy.pausesWithRemote("POST", "/install"), "install pauses");
+        require(RoutePolicy.allowedUrl("https://authenticator.cursor.sh/x"), "https url");
+        require(!RoutePolicy.allowedUrl("intent://x#Intent;end"), "no intent url");
+        require(!RoutePolicy.allowedUrl("file:///sdcard/a"), "no file url");
+        require(!RoutePolicy.allowedUrl("javascript:alert(1)"), "no js url");
+        require(RoutePolicy.validPackage("com.android.chrome"), "chrome pkg");
+        require(!RoutePolicy.validPackage("com.x;rm"), "bad pkg");
         require(PermissionGuide.mentionsRestrictedSettings(), "restricted settings");
         require(PermissionGuide.PAUSE_REMOTE.equals("暂停遥控"), "pause");
         System.out.println("PASS");

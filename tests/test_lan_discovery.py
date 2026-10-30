@@ -150,6 +150,27 @@ class TcpSweepTests(unittest.TestCase):
         self.assertIsNone(lan.scan_for_phone(interfaces, lambda ip, t: self.fail(ip),
                                              sweep=lambda a, deadline=None: []))
 
+    def test_swept_hits_are_probed_concurrently_with_waking_timeout(self):
+        import time as _t
+        interfaces = [{"address": "192.168.5.10", "prefix_length": 24, "name": "WLAN",
+                       "hardware_interface": True, "default_gateway": True}]
+        seen = []
+
+        def probe(ip, timeout):
+            seen.append(timeout)
+            if ip == "192.168.5.77":
+                _t.sleep(1.0)  # a phone waking up answers slowly
+                return True
+            _t.sleep(1.0)
+            return False
+
+        started = _t.monotonic()
+        found = lan.scan_for_phone(interfaces, probe, deadline=_t.monotonic() + 20,
+                                   sweep=lambda a, deadline=None: ["192.168.5.%d" % i for i in range(2, 9)] + ["192.168.5.77"])
+        self.assertEqual(found, "192.168.5.77")
+        self.assertLess(_t.monotonic() - started, 3.0)
+        self.assertTrue(all(t >= 3.0 for t in seen))
+
 
 if __name__ == "__main__":
     unittest.main()

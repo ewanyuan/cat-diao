@@ -147,9 +147,14 @@ def scan_for_phone(interfaces, probe, deadline=None, on_progress=None,
     checked = 0
     stages = build_scan_stages(interfaces)
     if sweep is not None and stages:
-        # One ordered sweep over every tier: tiers only matter for ordering, and
-        # separate sweeps would each pay the connect timeout again.
-        stages = [sweep([ip for stage in stages for ip in stage], deadline=deadline)]
+        # One ordered sweep over every tier, then probe every open port at once
+        # with a /hello timeout long enough for a phone that is waking from idle
+        # (measured ~3 s). Other LAN hosts with port 8767 open must not delay it.
+        reserve = min(POST_SWEEP_RESERVE, max(0.0, (deadline - clock()) / 3))
+        hits = list(sweep([ip for stage in stages for ip in stage], deadline=deadline - reserve))
+        if on_progress:
+            on_progress(len(hits))
+        return _probe_hits(hits, probe, deadline, clock)
     executor = ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
     should_wait_for_workers = True
     try:
@@ -203,6 +208,38 @@ def scan_for_phone(interfaces, probe, deadline=None, on_progress=None,
         if on_progress and checked % 256:
             on_progress(checked)
     return None
+
+POST_SWEEP_RESERVE = 6.0
+POST_SWEEP_HELLO_TIMEOUT = 5.0
+
+
+def _probe_hits(hits, probe, deadline, clock=time.monotonic):
+    """Probe swept addresses concurrently; return the first (in input order) that answers."""
+    if not hits:
+        return None
+    remaining = deadline - clock()
+    if remaining <= 0:
+        return None
+    timeout = min(POST_SWEEP_HELLO_TIMEOUT, remaining)
+    executor = ThreadPoolExecutor(max_workers=min(64, len(hits)))
+    try:
+        futures = {executor.submit(probe, ip, timeout): ip for ip in hits}
+        pending = set(futures)
+        while pending:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                return None
+            done, pending = wait(pending, timeout=remaining, return_when=FIRST_COMPLETED)
+            for future in done:
+                try:
+                    if future.result():
+                        return futures[future]
+                except Exception:
+                    pass
+        return None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
 
 SWEEP_CONCURRENCY = 512  # measured on Ewan's WLAN: 2048+ makes Windows drop every connect
 SWEEP_TIMEOUT = 0.4

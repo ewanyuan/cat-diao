@@ -41,6 +41,8 @@ PAIR_MISS = (
     "可以改用手机热点或家里 Wi-Fi。"
 )
 DISCOVERY_WINDOW_SECONDS = 3.5
+SAVED_ADDRESS_BUDGET = 9.0
+SAVED_HELLO_TIMEOUT = 4.5
 SCAN_WINDOW_SECONDS = 30.0  # a /18 TCP sweep measured ~15 s on Ewan's WLAN
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
@@ -455,9 +457,23 @@ def _discover_mdns(deadline, stop, on_candidate):
             sock.close()
 
 
-def _phone_at(candidate, token, deadline):
+def _hello(candidate, deadline, timeout=2, attempts=1):
+    """GET /hello, retrying once a waking phone has had time to answer."""
+    last = None
+    for _ in range(max(1, attempts)):
+        if time.monotonic() >= deadline:
+            break
+        try:
+            return request(candidate, "GET", "/hello", timeout=timeout, deadline=deadline)
+        except (OSError, RuntimeError) as error:
+            last = error
+            time.sleep(min(0.3, max(0.0, deadline - time.monotonic())))
+    raise last if last else TimeoutError("timed out")
+
+
+def _phone_at(candidate, token, deadline, hello_timeout=2, attempts=1):
     try:
-        hello = request(candidate, "GET", "/hello", timeout=2, deadline=deadline)
+        hello = _hello(candidate, deadline, hello_timeout, attempts)
         if not isinstance(hello, dict) or hello.get("name") not in ("手机直达", "猫叼"):
             return False
         if token:
@@ -507,7 +523,8 @@ def _scan_lan(token, deadline, on_progress):
     interfaces = local_interfaces(deadline=deadline)
 
     def probe(ip, timeout):
-        return _phone_at(f"http://{ip}:{lan_discovery.PORT}", None, time.monotonic() + timeout)
+        return _phone_at(f"http://{ip}:{lan_discovery.PORT}", None, time.monotonic() + timeout,
+                         hello_timeout=timeout)
 
     scan_deadline = min(deadline, time.monotonic() + SCAN_WINDOW_SECONDS)
     result = lan_discovery.scan_for_phone(
@@ -533,7 +550,10 @@ def discover(token=None, deadline=None, preferred_address=None, on_progress=None
     for candidate in _candidate_urls(preferred_address):
         if time.monotonic() >= deadline:
             return None
-        if _phone_at(candidate, token, min(deadline, time.monotonic() + 2.5)):
+        # The first /hello after the phone idles can take 3+ s; give the saved
+        # address a longer first timeout and one retry before falling back.
+        if _phone_at(candidate, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                     hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
             return candidate
 
     if tcp_only:
@@ -908,7 +928,8 @@ def authenticated(args):
     if not token:
         raise RuntimeError("尚未连接手机。请先运行：python 手机直达.py pair")
     if args.address:
-        if not _phone_at(address, token, time.monotonic() + 3.0):
+        if not _phone_at(address, token, time.monotonic() + SAVED_ADDRESS_BUDGET,
+                         hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
             raise RuntimeError("无法验证这台已配对的手机。请检查手机显示的地址，或省略 --address 自动寻找。")
     else:
         found = discover(token, preferred_address=address, on_progress=_scan_progress)
@@ -1108,6 +1129,13 @@ def main():
     for name in ("x1", "y1", "x2", "y2"):
         swipe.add_argument(name, type=int)
     swipe.add_argument("--duration", type=int, default=350)
+    commands.add_parser("ui", help="读出当前界面的文字与控件（密码框已遮盖）")
+    typed = commands.add_parser("type", help="在当前焦点输入框填入文字（拒绝密码框）")
+    typed.add_argument("text")
+    url = commands.add_parser("open-url", help="用指定应用打开网址，如 --app com.android.chrome")
+    url.add_argument("url"); url.add_argument("--app")
+    commands.add_parser("install", help="在手机上打开最近收到的 APK 的安装界面")
+    tap.add_argument("--respect-user", action="store_true", help="手机刚被人操作时不点按")
     args = parser.parse_args()
     if args.command == "pair":
         saved = config_read()
@@ -1144,14 +1172,24 @@ def main():
         for item in result:
             print(item["name"] + "\t" + item["package"])
         return
+    if command == "ui":
+        print(json.dumps(request(address, "GET", "/ui", token), ensure_ascii=False, indent=2))
+        return
     if command == "open":
         path, body = "/open", {"package": args.package}
+    elif command == "type":
+        path, body = "/action", {"type": "set_text", "text": args.text}
+    elif command == "open-url":
+        path, body = "/open-url", {"url": args.url, **({"package": args.app} if args.app else {})}
+    elif command == "install":
+        path, body = "/install", {}
     elif command == "volume":
         path, body = "/volume", {"channel": "ring" if args.ring else "media", "level": args.level}
     elif command == "brightness":
         path, body = "/brightness", {"level": args.level}
     elif command == "tap":
-        path, body = "/action", {"type": "tap", "x": args.x, "y": args.y}
+        path, body = "/action", {"type": "tap", "x": args.x, "y": args.y,
+                                  "respect_user": bool(args.respect_user)}
     elif command == "swipe":
         path, body = "/action", {"type": "swipe", "x1": args.x1, "y1": args.y1,
                                   "x2": args.x2, "y2": args.y2, "duration_ms": args.duration}

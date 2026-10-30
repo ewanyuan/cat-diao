@@ -26,7 +26,11 @@ android {
         targetSdk = 35
         versionCode = 200
         versionName = "2.0"
+        val commit = (System.getenv("CATDIAO_COMMIT") ?: "dev").replace(Regex("[^0-9A-Za-z._-]"), "")
+        buildConfigField("String", "GIT_COMMIT", "\"" + commit + "\"")
     }
+
+    buildFeatures { buildConfig = true }
 
     signingConfigs {
         create("release") {
