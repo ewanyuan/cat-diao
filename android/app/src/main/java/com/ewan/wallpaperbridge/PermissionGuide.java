@@ -18,6 +18,14 @@ public final class PermissionGuide {
                     + "小米是自启动和省电策略；华为是应用启动管理；OPPO 是耗电保护；"
                     + "vivo 是后台高耗电；三星是不受限制。";
 
+    public static final String SCREEN_OFF_TITLE = "让猫叼息屏后也能连上电脑";
+    public static final String SCREEN_OFF_BODY =
+            "现在系统会在息屏后关掉猫叼，电脑就连不上手机。\n\n"
+                    + "1. 点下面的“去允许”，选“允许”。\n"
+                    + "2. OPPO / 一加 / realme：设置 → 应用 → 应用管理 → 猫叼 → 耗电管理，"
+                    + "打开“允许完全后台行为”“允许自动启动”“允许关联启动”。\n"
+                    + "3. 在最近任务里把猫叼下拉锁住，别一键清理掉。";
+
     public static final String AUTOSTART_BODY =
             "猫叼会在手机开机后自动恢复连接。若系统仍拦住后台，请按上面的说明打开自启动。";
 

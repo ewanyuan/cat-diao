@@ -115,5 +115,41 @@ Wireless LAN adapter WLAN:
         self.assertLess(time.monotonic() - started, 0.22)
 
 
+class TcpSweepTests(unittest.TestCase):
+    def test_sweep_keeps_only_listening_addresses_in_order(self):
+        import socket
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(16)
+        port = listener.getsockname()[1]
+        try:
+            found = lan.tcp_sweep(["127.0.0.2", "127.0.0.1"], port=port, timeout=0.5)
+        finally:
+            listener.close()
+        self.assertEqual(found, ["127.0.0.1"])
+
+    def test_scan_probes_only_swept_addresses(self):
+        interfaces = [{"address": "192.168.5.10", "prefix_length": 24, "name": "WLAN",
+                       "hardware_interface": True, "default_gateway": True}]
+        probed = []
+
+        def sweep(addresses, deadline=None):
+            self.assertIn("192.168.5.77", addresses)
+            return ["192.168.5.3", "192.168.5.77"]
+
+        def probe(ip, timeout):
+            probed.append(ip)
+            return ip == "192.168.5.77"
+
+        self.assertEqual(lan.scan_for_phone(interfaces, probe, sweep=sweep), "192.168.5.77")
+        self.assertEqual(sorted(probed), ["192.168.5.3", "192.168.5.77"])
+
+    def test_empty_sweep_returns_none_without_probing(self):
+        interfaces = [{"address": "192.168.5.10", "prefix_length": 24, "name": "WLAN",
+                       "hardware_interface": True, "default_gateway": True}]
+        self.assertIsNone(lan.scan_for_phone(interfaces, lambda ip, t: self.fail(ip),
+                                             sweep=lambda a, deadline=None: []))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,8 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Environment;
 import android.os.IBinder;
+import android.os.PowerManager;
+import android.net.wifi.WifiManager;
 import android.os.StatFs;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
@@ -261,6 +263,38 @@ public class BridgeService extends Service {
                 .putString("shared_uri", uri.toString()).apply();
     }
 
+    private PowerManager.WakeLock cpuLock;
+    private WifiManager.WifiLock wifiLock;
+
+    // 息屏后保持 CPU 与 WiFi 不睡，8767 才能被电脑连上（OPPO 等机型息屏会断 WiFi）
+    @SuppressWarnings("deprecation")
+    private void acquireLocks() {
+        try {
+            PowerManager power = getSystemService(PowerManager.class);
+            if (power != null && cpuLock == null) {
+                cpuLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "catdiao:bridge");
+                cpuLock.setReferenceCounted(false);
+                cpuLock.acquire();
+            }
+        } catch (RuntimeException ignored) { cpuLock = null; }
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null && wifiLock == null) {
+                int mode = Build.VERSION.SDK_INT >= 29 ? WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                        : WifiManager.WIFI_MODE_FULL_HIGH_PERF;
+                wifiLock = wifi.createWifiLock(mode, "catdiao:bridge");
+                wifiLock.setReferenceCounted(false);
+                wifiLock.acquire();
+            }
+        } catch (RuntimeException ignored) { wifiLock = null; }
+    }
+
+    private void releaseLocks() {
+        try { if (cpuLock != null && cpuLock.isHeld()) cpuLock.release(); } catch (RuntimeException ignored) { }
+        try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (RuntimeException ignored) { }
+        cpuLock = null; wifiLock = null;
+    }
+
     @Override public void onCreate() {
         super.onCreate();
         active = this;
@@ -270,6 +304,7 @@ public class BridgeService extends Service {
         startForeground(47, notification(preferences.getString("computer_token", "").isEmpty()
                 ? "小窝未连接；收藏会先保存在手机"
                 : setupComplete() ? "小窝连接已设好" : "小窝连接设置待完成"));
+        acquireLocks();
         preferences.edit().remove("keep_awake").apply();
         localServer = new LocalBridgeServer(PORT, 8769, this::handleClient, error -> {
             if (!destroyed && active == this) showNotification("连接未开启，请重新打开应用");
@@ -314,7 +349,7 @@ public class BridgeService extends Service {
     }
 
     @Override public void onDestroy() {
-        destroyed = true;
+        destroyed = true; releaseLocks();
         if (bluetooth != null) bluetooth.close();
         ConnectivityManager manager = getSystemService(ConnectivityManager.class);
         if (manager != null && networkCallback != null) {

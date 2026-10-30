@@ -41,7 +41,7 @@ PAIR_MISS = (
     "可以改用手机热点或家里 Wi-Fi。"
 )
 DISCOVERY_WINDOW_SECONDS = 3.5
-SCAN_WINDOW_SECONDS = 20.0
+SCAN_WINDOW_SECONDS = 30.0  # a /18 TCP sweep measured ~15 s on Ewan's WLAN
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
@@ -511,7 +511,8 @@ def _scan_lan(token, deadline, on_progress):
 
     scan_deadline = min(deadline, time.monotonic() + SCAN_WINDOW_SECONDS)
     result = lan_discovery.scan_for_phone(
-        interfaces, probe, deadline=scan_deadline, on_progress=on_progress)
+        interfaces, probe, deadline=scan_deadline, on_progress=on_progress,
+        sweep=lan_discovery.tcp_sweep)
     if on_progress:
         print()
     if result:

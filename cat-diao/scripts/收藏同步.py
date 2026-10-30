@@ -42,6 +42,22 @@ KB_NAME = "参考与情报"
 PROCESS = {'summary_enabled':False,'enable_multimodel':False,'graph_enabled':False,
            'question_generation_config':{'enabled':False}}
 PHONE_CONNECTION_INTERVAL_S = 10
+# Last source IP of a request the phone signed with the paired token. If the
+# phone came back on a new DHCP address, this lets the receiver reconnect on
+# the next check instead of waiting for mDNS (which is often blocked on
+# corporate WiFi) or a manual pair.
+PHONE_SEEN_LOCK = threading.Lock()
+PHONE_SEEN_IP = ""
+PHONE_WAKE = threading.Event()
+
+
+def note_phone_seen(ip):
+    global PHONE_SEEN_IP
+    with PHONE_SEEN_LOCK:
+        changed = PHONE_SEEN_IP != ip
+        PHONE_SEEN_IP = ip
+    if changed:
+        PHONE_WAKE.set()
 PHONE_CONNECTION_TIMEOUT_S = 9.5
 PHONE_CONNECTION_STATE = {"state": "not_started", "started_at": 0, "finished_at": 0}
 PHONE_CONNECTION_LOCK = threading.Lock()
@@ -568,6 +584,23 @@ def maintain_phone_connection():
                     pass
             except Exception:
                 pass
+        with PHONE_SEEN_LOCK:
+            seen_ip = PHONE_SEEN_IP
+        if seen_ip:
+            stage = "phone_seen"
+            hinted = f"http://{seen_ip}:8767"  # phone app listens on 8767
+            if hinted != address:
+                try:
+                    reply = phone_bridge.request(hinted, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
+                    if isinstance(reply, dict) and reply.get("connected") is True:
+                        if phone_bridge.update_pair_address(token, hinted, deadline):
+                            address = hinted
+                            state = "connected"
+                        else:
+                            state = "pairing_changed"
+                        return
+                except Exception:
+                    pass
         stage = "discovery"
         found = phone_bridge.discover(token, deadline=deadline, allow_scan=False)
         if not found:
@@ -702,6 +735,7 @@ class Receiver(BaseHTTPRequestHandler):
                 return self.respond(403, {"error": "未授权"})
             self._auth_token = token
             self._auth_nonce = verdict.nonce
+            note_phone_seen(self.client_address[0])
             return self.respond(200, {"service": "catdiao-nest", "connected": True})
         except (OSError, ValueError):
             return self.respond(503, {"error": "连接信息暂时不可用"})
@@ -717,6 +751,7 @@ class Receiver(BaseHTTPRequestHandler):
                 return self.respond(403, {"error": "未授权"})
             self._auth_token = expected
             self._auth_nonce = verdict.nonce
+            note_phone_seen(self.client_address[0])
             length = int(self.headers.get("Content-Length", "0"))
             if length < 1 or length > (700000 if self.path == "/captures" else 262144 if self.path == "/clipboard" else 4096):
                 return self.respond(413, {"error": "请求过大"})
@@ -870,7 +905,9 @@ def main():
                 maintain_phone_connection()
             except Exception:
                 pass
-            time.sleep(max(0.05, PHONE_CONNECTION_INTERVAL_S - (time.monotonic() - started)))
+            # Wake early when the phone just reached us from a new address.
+            PHONE_WAKE.wait(max(0.05, PHONE_CONNECTION_INTERVAL_S - (time.monotonic() - started)))
+            PHONE_WAKE.clear()
 
     server = ReceiverServer(("0.0.0.0", PORT), Receiver)
     BLUETOOTH_RECEIVER = BluetoothReceiver(phone_bridge, receive)

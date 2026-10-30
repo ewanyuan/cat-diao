@@ -111,10 +111,40 @@ public class MainActivity extends Activity {
         }
         mainHandler.post(refresh);
         mainHandler.postDelayed(this::maybeStartSetup, 650);
+        mainHandler.postDelayed(this::maybeAskBackgroundExemption, 1800);
         if (Build.VERSION.SDK_INT >= 37 &&
                 checkSelfPermission(LOCAL_NETWORK_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{LOCAL_NETWORK_PERMISSION}, 1);
         }
+    }
+
+    // 已配对但系统仍在省电管着猫叼时，每天最多提醒一次；不然 OPPO 等机型息屏就断。
+    private void maybeAskBackgroundExemption() {
+        if (!visible || isFinishing()) return;
+        android.content.SharedPreferences prefs = getSharedPreferences("bridge", MODE_PRIVATE);
+        if (prefs.getString("computer_token", "").isEmpty()) return;
+        android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
+        if (power == null || power.isIgnoringBatteryOptimizations(getPackageName())) return;
+        long now = System.currentTimeMillis();
+        if (now - prefs.getLong("battery_prompt_at", 0L) < 24L * 60 * 60 * 1000) return;
+        prefs.edit().putLong("battery_prompt_at", now).apply();
+        new AlertDialog.Builder(this)
+                .setTitle(PermissionGuide.SCREEN_OFF_TITLE)
+                .setMessage(PermissionGuide.SCREEN_OFF_BODY)
+                .setNegativeButton("稍后", null)
+                .setPositiveButton("去允许", (dialog, which) -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                Uri.parse("package:" + getPackageName())));
+                    } catch (Exception error) {
+                        try {
+                            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:" + getPackageName())));
+                        } catch (Exception ignored) {
+                            Toast.makeText(this, "请到系统设置的电池页面，允许猫叼在后台运行", Toast.LENGTH_LONG).show();
+                        }
+                    }
+                }).show();
     }
 
     @Override protected void onResume() {

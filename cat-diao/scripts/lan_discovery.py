@@ -139,13 +139,17 @@ def build_scan_stages(interfaces):
 
 
 def scan_for_phone(interfaces, probe, deadline=None, on_progress=None,
-                   max_workers=DEFAULT_WORKERS, clock=time.monotonic):
+                   max_workers=DEFAULT_WORKERS, clock=time.monotonic, sweep=None):
     """Probe staged addresses concurrently; probe(ip, timeout) must be read-only."""
     deadline = deadline if deadline is not None else clock() + DEFAULT_SCAN_SECONDS
     if on_progress:
         on_progress(0)
     checked = 0
     stages = build_scan_stages(interfaces)
+    if sweep is not None and stages:
+        # One ordered sweep over every tier: tiers only matter for ordering, and
+        # separate sweeps would each pay the connect timeout again.
+        stages = [sweep([ip for stage in stages for ip in stage], deadline=deadline)]
     executor = ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
     should_wait_for_workers = True
     try:
@@ -199,6 +203,52 @@ def scan_for_phone(interfaces, probe, deadline=None, on_progress=None,
         if on_progress and checked % 256:
             on_progress(checked)
     return None
+
+SWEEP_CONCURRENCY = 512  # measured on Ewan's WLAN: 2048+ makes Windows drop every connect
+SWEEP_TIMEOUT = 0.4
+
+
+def tcp_sweep(addresses, port=PORT, deadline=None, concurrency=SWEEP_CONCURRENCY,
+              timeout=SWEEP_TIMEOUT, clock=time.monotonic):
+    """Return addresses (in input order) that accept a TCP connect on port.
+
+    asyncio keeps hundreds of half-open connects in flight, so a whole /18 takes
+    ~15 s instead of the ~35 s a thread-per-HTTP-probe sweep needs.
+    """
+    import asyncio
+
+    addresses = list(addresses)
+    if not addresses:
+        return []
+
+    async def run():
+        found = set()
+        gate = asyncio.Semaphore(max(1, int(concurrency)))
+
+        async def one(ip):
+            async with gate:
+                if deadline is not None and clock() >= deadline:
+                    return
+                wait_for = timeout if deadline is None else max(0.05, min(timeout, deadline - clock()))
+                try:
+                    _, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), wait_for)
+                except Exception:
+                    return
+                found.add(ip)
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+
+        await asyncio.gather(*(one(ip) for ip in addresses))
+        return found
+
+    loop = asyncio.new_event_loop()
+    try:
+        found = loop.run_until_complete(run())
+    finally:
+        loop.close()
+    return [ip for ip in addresses if ip in found]
 
 
 def _powershell_interfaces(deadline=None):
