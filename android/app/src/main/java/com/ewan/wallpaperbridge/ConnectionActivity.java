@@ -93,7 +93,7 @@ public class ConnectionActivity extends Activity {
         String sync = syncedAt <= 0 ? "" : android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(syncedAt));
         FirstConnection.Screen screen = FirstConnection.present(new FirstConnection.Facts(
                 !trusted.isEmpty(), askedToWait, askedForHelp, code, name, sync, localAddress()));
-        String signature = screen.state + screen.code + screen.sentence + howOpen + screen.detail;
+        String signature = screen.state + screen.code + screen.sentence + howOpen + screen.detail + screen.copyText + screen.address;
         if (signature.equals(rendered) && getWindow().getDecorView().findViewById(android.R.id.content) != null
                 && rendered.length() > 0) {
             handler.postDelayed(this::render, 700);
@@ -136,46 +136,56 @@ public class ConnectionActivity extends Activity {
             digits.setPadding(0, dp(22), 0, dp(8));
             page.addView(digits);
         }
+
+        // Path 1: short sentence for AI
         if (!screen.copyText.isEmpty()) {
-            TextView card = label(screen.copyText, 15, INK, false);
+            TextView card = label(screen.copyText, 15, INK, true);
             card.setPadding(dp(14), dp(14), dp(14), dp(14));
             card.setBackground(round(PAPER, BORDER, 14));
             LinearLayout.LayoutParams cardLayout = new LinearLayout.LayoutParams(-1, -2);
             cardLayout.topMargin = dp(16);
             page.addView(card, cardLayout);
+            TextView tip = label("复制后发给电脑上的 AI 即可。", 13, MUTED, false);
+            tip.setPadding(0, dp(6), 0, 0);
+            page.addView(tip);
         }
-        if (screen.showAddress) {
-            TextView address = label(screen.address, 13, MUTED, false);
-            address.setPadding(0, dp(14), 0, 0);
-            address.setTextIsSelectable(true);
-            page.addView(address);
-            TextView copyAddress = label("复制地址", 14, CORAL_DARK, true);
-            copyAddress.setPadding(0, dp(8), 0, 0);
-            copyAddress.setOnClickListener(v -> copy(screen.address));
-            page.addView(copyAddress);
+        if (!screen.primary.isEmpty() && "copy".equals(screen.primaryAction)) {
+            Button primary = button(screen.primary, true);
+            LinearLayout.LayoutParams primaryLayout = new LinearLayout.LayoutParams(-1, dp(52));
+            primaryLayout.topMargin = dp(12);
+            page.addView(primary, primaryLayout);
+            primary.setOnClickListener(v -> act(screen.primaryAction, request));
         }
+
+        // Path 2: QR screenshot for AI — payload is only the address URL
         if (screen.showQr && screen.address.startsWith("http://")) {
+            TextView qrHint = label(FirstConnection.QR_HINT, 16, INK, true);
+            qrHint.setPadding(0, dp(18), 0, 0);
+            page.addView(qrHint);
+            TextView qrTip = label("AI 从图里读出地址再配对。", 13, MUTED, false);
+            qrTip.setPadding(0, dp(6), 0, 0);
+            page.addView(qrTip);
             try {
                 boolean[][] matrix = QrCode.encode(screen.address);
                 ImageView image = new ImageView(this);
                 image.setImageBitmap(bitmap(matrix));
                 image.setContentDescription("连接地址二维码");
-                LinearLayout.LayoutParams qr = new LinearLayout.LayoutParams(dp(168), dp(168));
-                qr.topMargin = dp(12);
+                LinearLayout.LayoutParams qr = new LinearLayout.LayoutParams(dp(200), dp(200));
+                qr.topMargin = dp(10);
                 qr.gravity = Gravity.CENTER_HORIZONTAL;
                 page.addView(image, qr);
-                TextView caption = label("电脑找不到时，把这个地址给电脑。", 12, MUTED, false);
-                caption.setPadding(0, dp(6), 0, 0);
-                page.addView(caption);
             } catch (RuntimeException ignored) { }
         }
+
         for (String cause : screen.causes) {
             TextView line = label(cause, 15, INK, false);
             line.setPadding(0, dp(12), 0, 0);
             page.addView(line);
         }
+
+        // Advanced: PowerShell / hand-typed IP — not the main path
         if (!screen.how.isEmpty()) {
-            TextView toggle = label(howOpen ? "收起" : "怎么做", 14, CORAL_DARK, true);
+            TextView toggle = label(howOpen ? "收起高级" : "高级", 14, CORAL_DARK, true);
             toggle.setPadding(0, dp(16), 0, 0);
             toggle.setOnClickListener(v -> {
                 howOpen = !howOpen;
@@ -184,12 +194,24 @@ public class ConnectionActivity extends Activity {
             });
             page.addView(toggle);
             if (howOpen) {
+                if (screen.address.startsWith("http://")) {
+                    TextView address = label(screen.address, 13, MUTED, false);
+                    address.setPadding(0, dp(10), 0, 0);
+                    address.setTextIsSelectable(true);
+                    page.addView(address);
+                    TextView copyAddress = label("复制地址", 14, CORAL_DARK, true);
+                    copyAddress.setPadding(0, dp(8), 0, 0);
+                    copyAddress.setOnClickListener(v -> copy(screen.address));
+                    page.addView(copyAddress);
+                }
                 TextView body = label(screen.how, 14, MUTED, false);
                 body.setPadding(0, dp(8), 0, 0);
                 page.addView(body);
             }
         }
-        if (!screen.primary.isEmpty()) {
+
+        // Non-copy primary (allow / retry / start / done)
+        if (!screen.primary.isEmpty() && !"copy".equals(screen.primaryAction)) {
             Button primary = button(screen.primary, true);
             LinearLayout.LayoutParams primaryLayout = new LinearLayout.LayoutParams(-1, dp(52));
             primaryLayout.topMargin = dp(22);
@@ -221,7 +243,7 @@ public class ConnectionActivity extends Activity {
             askedForHelp = false;
             askedToWait = true;
         } else if ("copy".equals(action)) {
-            copy(FirstConnection.AI_LINE);
+            copy(FirstConnection.aiLine(localAddress()));
             return;
         } else if ("allow".equals(action) || "deny".equals(action)) {
             if (request == null || !BridgeService.decidePair(this, request.id, "allow".equals(action))) {

@@ -13,12 +13,17 @@ public final class FirstConnectionTest {
         FirstConnection.Screen waiting = FirstConnection.present(
                 facts(false, true, false, "", "", "", "http://10.69.1.253:8767"));
         require(waiting.state == FirstConnection.State.WAITING, "waiting");
-        require(waiting.copyText.equals(FirstConnection.AI_LINE), "copyable line");
-        require(waiting.copyText.contains(FirstConnection.PC_COMMAND), "points at run.ps1 pair");
+        require(waiting.copyText.equals(FirstConnection.aiLine("http://10.69.1.253:8767")), "copyable line");
+        require(waiting.copyText.startsWith(FirstConnection.AI_LINE), "short AI sentence");
+        require(waiting.copyText.contains("http://10.69.1.253:8767"), "embeds phone address");
+        require(!waiting.copyText.contains(FirstConnection.PC_COMMAND), "PowerShell not in main copy");
         require(waiting.address.equals("http://10.69.1.253:8767"), "phone address");
         require(waiting.showQr, "qr when the computer must be told the address");
-        require(waiting.how.contains("run.ps1 pair") && waiting.how.contains("允许"), "how expands");
+        require(!waiting.showAddress, "address stays under advanced");
+        require(waiting.how.contains(FirstConnection.PC_COMMAND) && waiting.how.contains("允许"), "advanced expands");
+        require(waiting.how.contains("http://10.69.1.253:8767"), "advanced keeps address");
         require(!waiting.bluetoothEnabled, "still no bluetooth");
+        require(waiting.sentence.contains("任选一种"), "two equal main paths");
 
         FirstConnection.Screen pairing = FirstConnection.present(
                 facts(false, true, true, "302041", "书房", "", "http://10.69.1.253:8767"));
@@ -40,9 +45,10 @@ public final class FirstConnectionTest {
         require(problems.causes.length == 3, "three causes");
         String joined = String.join("\n", problems.causes);
         require(joined.contains("同一个可互访的 Wi-Fi") && joined.contains("热点")
-                && joined.contains("公共 Wi-Fi") && joined.contains("run.ps1 pair --address"), "plain causes");
+                && joined.contains("公共 Wi-Fi") && joined.contains("高级"), "plain causes");
         require("retry".equals(problems.primaryAction), "back to waiting");
-        require(problems.showQr && problems.showAddress, "address fallback");
+        require(problems.showQr && !problems.showAddress, "qr main, address in advanced");
+        require(problems.copyText.contains("http://10.69.1.253:8767"), "problems keeps AI line");
 
         boolean[][] qr = QrCode.encode("http://10.69.1.253:8767");
         require(qr.length == 25 && qr[0].length == 25, "version 2 size");
