@@ -10,11 +10,11 @@ public final class PermissionGuide {
             "安卓 13 以上要先放行：打开猫叼的应用信息，点右上角 ⋯，选「允许受限设置」，再回来开屏幕控制。";
 
     public static final String BATTERY_BODY =
-            "允许猫叼后台运行，电脑才能一直连上。OPPO 还要在耗电管理里打开「允许完全后台行为」。";
+            "允许猫叼后台运行，电脑才能一直连上；OPPO 还要打开「允许完全后台行为」。";
 
     public static final String SCREEN_OFF_TITLE = "让猫叼息屏后也能连上电脑";
     public static final String SCREEN_OFF_BODY =
-            "息屏后系统会关掉猫叼。点「去允许」选「允许」；OPPO 再到 应用管理 → 猫叼 → 耗电管理，打开「允许完全后台行为」和「允许自动启动」。";
+            "点「去允许」选允许；OPPO 还要到 应用管理→猫叼→耗电管理，打开「允许完全后台行为」和「允许自动启动」。";
 
     public static final String AUTOSTART_BODY =
             "猫叼会在手机开机后自动恢复连接。若系统仍拦住后台，请按上面的说明打开自启动。";

@@ -330,6 +330,7 @@ public class BridgeService extends Service {
                 .build();
         networkCallback = new ConnectivityManager.NetworkCallback() {
             @Override public void onAvailable(Network network) {
+                acquireLocks();
                 ComputerConnection check = computerConnection;
                 if (check != null) check.networkReady();
                 requestCaptureSync();
@@ -353,18 +354,30 @@ public class BridgeService extends Service {
 
     /** OPPO and others stop the service when 猫叼 is swiped away; come back shortly after. */
     @Override public void onTaskRemoved(Intent rootIntent) {
-        try {
-            android.app.AlarmManager alarms = getSystemService(android.app.AlarmManager.class);
-            PendingIntent restart = PendingIntent.getForegroundService(this, 53,
-                    new Intent(this, BridgeService.class),
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            if (alarms != null) alarms.set(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    android.os.SystemClock.elapsedRealtime() + 3000, restart);
-        } catch (RuntimeException ignored) { }
+        scheduleServiceRestart();
         super.onTaskRemoved(rootIntent);
     }
 
+    /** Ask AlarmManager to bring the foreground service back if the ROM killed it. */
+    private void scheduleServiceRestart() {
+        try {
+            android.app.AlarmManager alarms = getSystemService(android.app.AlarmManager.class);
+            if (alarms == null) return;
+            PendingIntent restart = PendingIntent.getForegroundService(this, 53,
+                    new Intent(this, BridgeService.class),
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            long when = android.os.SystemClock.elapsedRealtime() + 3000;
+            if (Build.VERSION.SDK_INT >= 23) {
+                alarms.setAndAllowWhileIdle(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP, when, restart);
+            } else {
+                alarms.set(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP, when, restart);
+            }
+        } catch (RuntimeException ignored) { }
+    }
+
     @Override public void onDestroy() {
+        // ROM may kill us while the screen is off; try to come back even without onTaskRemoved.
+        if (!preferences.getString("computer_token", "").isEmpty()) scheduleServiceRestart();
         destroyed = true; releaseLocks();
         if (bluetooth != null) bluetooth.close();
         ConnectivityManager manager = getSystemService(ConnectivityManager.class);

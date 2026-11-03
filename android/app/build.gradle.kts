@@ -24,8 +24,8 @@ android {
         applicationId = "io.github.ewanyuan.catdiao"
         minSdk = 29
         targetSdk = 35
-        versionCode = 201
-        versionName = "2.0.1"
+        versionCode = 202
+        versionName = "2.0.2"
         val commit = (System.getenv("CATDIAO_COMMIT") ?: "dev").replace(Regex("[^0-9A-Za-z._-]"), "")
         buildConfigField("String", "GIT_COMMIT", "\"" + commit + "\"")
     }

@@ -534,7 +534,9 @@ def _scan_lan(token, deadline, on_progress):
         print()
     if result:
         address = f"http://{result}:{lan_discovery.PORT}"
-        if _phone_at(address, token, min(deadline, time.monotonic() + 3.0)):
+        # TCP 扫到端口后仍要再验一次；刚醒的手机 /hello 约 3 秒，别用默认 2 秒超时。
+        if _phone_at(address, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                     hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
             return address
     return None
 
@@ -592,14 +594,17 @@ def discover(token=None, deadline=None, preferred_address=None, on_progress=None
                 batch = [item for item in found if item not in checked]
             for candidate in batch:
                 checked.add(candidate)
-                if _phone_at(candidate, token, min(listen_until, time.monotonic() + 2.5)):
+                # mDNS/广播给到的地址也可能撞上刚醒的手机，/hello 要留足 ~3+ 秒。
+                if _phone_at(candidate, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                             hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
                     return candidate
             alive = any(thread.is_alive() for thread in threads)
             if not alive:
                 with lock:
                     batch = [item for item in found if item not in checked]
                 for candidate in batch:
-                    if _phone_at(candidate, token, min(listen_until, time.monotonic() + 2.5)):
+                    if _phone_at(candidate, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                                 hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
                         return candidate
                 break
             if time.monotonic() >= deadline:
@@ -892,7 +897,7 @@ def pair(address, computer_name, wait_seconds=0):
     if not address:
         raise RuntimeError(PAIR_MISS)
     try:
-        hello = request(address, "GET", "/hello", timeout=3, deadline=window)
+        hello = request(address, "GET", "/hello", timeout=SAVED_HELLO_TIMEOUT, deadline=window)
     except (OSError, RuntimeError, ValueError):
         raise RuntimeError(PAIR_MISS)
     if not isinstance(hello, dict) or hello.get("name") not in ("猫叼", "手机直达"):
@@ -938,10 +943,17 @@ def authenticated(args):
             if not update_pair_address(token, found):
                 raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
         else:
-            raise RuntimeError(
-                "手机暂时没有接收连接。请在手机「开始连接」页查看地址，再运行 "
-                "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
-                "可以换手机热点或家里 Wi-Fi。")
+            # 扫网失败时再给已存地址一次醒机窗口，避免刚亮屏时误报「连不上」。
+            if not _placeholder(address) and _phone_at(
+                    address, token, time.monotonic() + SAVED_ADDRESS_BUDGET,
+                    hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
+                if not update_pair_address(token, address):
+                    raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
+            else:
+                raise RuntimeError(
+                    "手机暂时没有接收连接。请在手机「开始连接」页查看地址，再运行 "
+                    "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
+                    "可以换手机热点或家里 Wi-Fi。")
     return address, token
 
 

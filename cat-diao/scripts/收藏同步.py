@@ -566,8 +566,11 @@ def maintain_phone_connection():
             return
         address = saved.get("address", "")
         if address:
+            # 息屏刚醒时 /hello·心跳约 3 秒才回；接收端绝不能用 3 秒硬超时误判离线。
+            wake_timeout = getattr(phone_bridge, "SAVED_HELLO_TIMEOUT", 4.5)
             try:
-                reply = phone_bridge.request(address, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
+                reply = phone_bridge.request(address, "GET", "/heartbeat", token,
+                                             timeout=wake_timeout, deadline=deadline)
                 if not isinstance(reply, dict) or reply.get("connected") is not True:
                     raise RuntimeError("手机未确认连接")
                 state = "connected" if phone_bridge.update_pair_address(token, address, deadline) else "pairing_changed"
@@ -575,7 +578,8 @@ def maintain_phone_connection():
             except RuntimeError:
                 try:
                     # Keep older paired apps reachable until their update is installed.
-                    reply = phone_bridge.request(address, "GET", "/status", token, timeout=3, deadline=deadline)
+                    reply = phone_bridge.request(address, "GET", "/status", token,
+                                                 timeout=wake_timeout, deadline=deadline)
                     if not isinstance(reply, dict) or not reply.get("model"):
                         raise RuntimeError("手机未确认连接")
                     state = "connected" if phone_bridge.update_pair_address(token, address, deadline) else "pairing_changed"
@@ -591,7 +595,9 @@ def maintain_phone_connection():
             hinted = f"http://{seen_ip}:8767"  # phone app listens on 8767
             if hinted != address:
                 try:
-                    reply = phone_bridge.request(hinted, "GET", "/heartbeat", token, timeout=3, deadline=deadline)
+                    wake_timeout = getattr(phone_bridge, "SAVED_HELLO_TIMEOUT", 4.5)
+                    reply = phone_bridge.request(hinted, "GET", "/heartbeat", token,
+                                                 timeout=wake_timeout, deadline=deadline)
                     if isinstance(reply, dict) and reply.get("connected") is True:
                         if phone_bridge.update_pair_address(token, hinted, deadline):
                             address = hinted
