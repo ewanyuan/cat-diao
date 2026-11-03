@@ -127,7 +127,7 @@ public class CaptureActivity extends Activity {
             BridgeService.requestCaptureSync();
             Toast.makeText(this, "已叼在嘴里，连上小窝后自动送达", Toast.LENGTH_LONG).show();
         } catch (Exception error) {
-            Toast.makeText(this, "收藏失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "收藏没成功，请再试一次", Toast.LENGTH_LONG).show();
         }
     }
 

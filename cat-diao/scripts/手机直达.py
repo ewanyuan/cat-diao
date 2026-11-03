@@ -1042,6 +1042,33 @@ def send_file(address, token, filename):
     if reply.status >= 400:
         raise RuntimeError(data.get("error", "文件发送失败"))
     print("已发送到手机：" + data["folder"] + "/" + data["saved"])
+    note = UPDATE_NOTES.get(data.get("self_update", ""))
+    if note:
+        print(note)
+    return data
+
+
+UPDATE_NOTES = {
+    "installer_opened": "手机已弹出安装界面，请在手机上点「安装」。",
+    "tap_phone_notification": "请点手机上的猫叼通知，再点「安装」。",
+    "needs_install_permission": "请在手机上允许猫叼「安装未知应用」，然后再运行一次 update。",
+    "not_newer": "手机上的猫叼已是这个版本或更新，不用安装。",
+    "other_app": "这个 APK 不是猫叼，已只保存不安装。",
+}
+
+
+def update_app(address, token, filename):
+    data = send_file(address, token, filename)
+    if "self_update" in data:
+        return data
+    # Older phones do not auto-install; ask them to open the installer.
+    try:
+        reply = request(address, "POST", "/install", token, {})
+        print(UPDATE_NOTES.get("installer_opened" if reply.get("state") == "opened"
+                               else "tap_phone_notification"))
+    except Exception:
+        print("手机上的猫叼版本较旧：请在文件管理 → 下载/猫叼 里点这个 APK 安装。")
+    return data
 
 
 def set_wallpaper(address, token, filename):
@@ -1112,6 +1139,8 @@ def main():
     brightness.add_argument("level", type=int)
     sent = commands.add_parser("send", help="把电脑文件发送到手机下载目录")
     sent.add_argument("file")
+    updater = commands.add_parser("update", help="把新版猫叼 APK 发到手机并直接弹出安装界面")
+    updater.add_argument("apk")
     clipboard_send = commands.add_parser("clipboard-send", help="把电脑剪贴板或指定文字放入手机剪贴板")
     clipboard_send.add_argument("--text", help="要发送的文字；省略时读取电脑剪贴板")
     commands.add_parser("clipboard-listen", help="接收手机发来的文字并放入电脑剪贴板")
@@ -1151,6 +1180,8 @@ def main():
     command = args.command
     if command == "send":
         send_file(address, token, args.file); return
+    if command == "update":
+        update_app(address, token, args.apk); return
     if command == "clipboard-send":
         send_clipboard_text(address, token,
                             args.text if args.text is not None else read_windows_clipboard())

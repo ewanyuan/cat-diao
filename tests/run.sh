@@ -15,6 +15,7 @@ javac -encoding UTF-8 -d "$classes" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/ReconnectSchedule.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/RoutePolicy.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/PermissionGuide.java" \
+  "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/OverlayMath.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/FirstConnection.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/QrCode.java" \
   "$repository/tests/ComputerConnectionTest.java" \

@@ -119,14 +119,14 @@ public class OnboardingActivity extends Activity {
             row(panel, "小窝", "你的电脑。", false);
         } else if (page == 1) {
             row(panel, "分享", "在文章里点「分享」，选「猫叼」。", true);
-            row(panel, "复制", "复制链接或文字，点悬浮猫，再点收藏。首页也有「收藏复制内容」。", false);
+            row(panel, "复制", "复制内容后点悬浮猫，再点收藏。长按悬浮猫可关闭它。", false);
             note(content, "显示「已叼在嘴里」，就是还没送到小窝。");
         } else {
             row(panel, "发到小窝", "把复制的文字发到小窝剪贴板，或选文件发送。", true);
             row(panel, "操作手机", "在电脑上的 AI 工具（如 Codex）里查看手机、操作屏幕、换壁纸，也能把文字和文件发回手机。", false);
-            note(content, "第一次连接，点首页的「开始连接」。电脑运行 run.ps1 pair，手机会出现 6 位数字。和电脑一样再点允许。");
-            note(content, "收藏不用额外权限。看画面、点画面需要屏幕控制；安卓 13 及以上要先在应用信息右上角允许受限设置。开机后猫叼会自己恢复，也请按提示加入电池优化白名单。");
-            note(content, "换了 Wi-Fi 后，只要电脑端「猫叼接收」仍在运行，两台设备回到可互访的同一 Wi-Fi 就会自动连接并补送收藏，不用重新配对。");
+            note(content, "点首页「开始连接」，手机和电脑显示同样 6 位数字时点允许。");
+            note(content, "收藏不用开权限。要让电脑看和点手机，再按提示开屏幕控制。");
+            note(content, "换了 Wi-Fi 不用重新配对，回到同一网络会自动连上。");
         }
 
         LinearLayout dots = new LinearLayout(this);

@@ -490,7 +490,7 @@ public class MainActivity extends Activity {
         } else {
             new AlertDialog.Builder(this)
                     .setTitle("开启悬浮猫")
-                    .setMessage("允许悬浮显示后，在其他应用里点猫叼就能收藏，或把文字、文件发到小窝。")
+                    .setMessage("在其他应用里点悬浮猫就能收藏。不想要时长按它即可关闭。")
                     .setNegativeButton("暂不开启", null)
                     .setPositiveButton("去系统设置", (dialog, which) -> {
                         getSharedPreferences("bridge", MODE_PRIVATE).edit()
@@ -690,7 +690,7 @@ public class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this).setTitle("用蓝牙找回小窝")
-                .setMessage("打开电脑和手机的蓝牙，在系统设置中配对一次。以后换网络时，猫叼会自动找回连接。\n\n蓝牙可以送收藏；文件和剪贴板文字仍通过 Wi-Fi 传送。")
+                .setMessage("在系统设置里把手机和电脑的蓝牙配对一次。之后换了网络，猫叼会用蓝牙送收藏。")
                 .setNegativeButton("稍后", null)
                 .setPositiveButton("去设置", (dialog, which) -> {
                     if (!BluetoothLink.permission(this)) requestPermissions(
@@ -718,7 +718,7 @@ public class MainActivity extends Activity {
             BridgeService.shareFile(this, uri);
             sendSelectedFileToComputer(this);
         } catch (Exception error) {
-            Toast.makeText(this, "文件授权失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "这个文件打不开，请换一个再试", Toast.LENGTH_LONG).show();
         }
     }
 
