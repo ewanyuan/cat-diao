@@ -57,7 +57,24 @@ public final class SecurityPolicyTest {
         require(RoutePolicy.needsWriteSettings("POST", "/brightness"), "brightness");
         require(RoutePolicy.pausesWithRemote("POST", "/open"), "open pauses");
         require(!RoutePolicy.pausesWithRemote("GET", "/status"), "status stays");
+        require(RoutePolicy.needsScreen("GET", "/ui"), "ui needs screen");
+        require(!RoutePolicy.open("GET", "/ui"), "ui closed");
+        require(RoutePolicy.pausesWithRemote("POST", "/open-url"), "open-url pauses");
+        require(RoutePolicy.pausesWithRemote("POST", "/install"), "install pauses");
+        require(RoutePolicy.allowedUrl("https://authenticator.cursor.sh/x"), "https url");
+        require(!RoutePolicy.allowedUrl("intent://x#Intent;end"), "no intent url");
+        require(!RoutePolicy.allowedUrl("file:///sdcard/a"), "no file url");
+        require(!RoutePolicy.allowedUrl("javascript:alert(1)"), "no js url");
+        require(RoutePolicy.validPackage("com.android.chrome"), "chrome pkg");
+        require(!RoutePolicy.validPackage("com.x;rm"), "bad pkg");
         require(PermissionGuide.mentionsRestrictedSettings(), "restricted settings");
+        require(OverlayMath.snapX(100, 120, 1080) == 0, "snap left");
+        require(OverlayMath.snapX(700, 120, 1080) == 960, "snap right");
+        require(OverlayMath.tuckedX(0, 120, 1080) == -48, "tuck left");
+        require(OverlayMath.tuckedX(960, 120, 1080) == 1008, "tuck right");
+        require(OverlayMath.inCloseZone(540, 2250, 1080, 2340, 2.75f), "close zone bottom");
+        require(!OverlayMath.inCloseZone(540, 1200, 1080, 2340, 2.75f), "middle is not close");
+        require(!OverlayMath.inCloseZone(60, 2250, 1080, 2340, 2.75f), "corner is not close");
         require(PermissionGuide.PAUSE_REMOTE.equals("暂停遥控"), "pause");
         System.out.println("PASS");
     }

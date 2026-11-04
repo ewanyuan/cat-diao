@@ -41,7 +41,9 @@ PAIR_MISS = (
     "可以改用手机热点或家里 Wi-Fi。"
 )
 DISCOVERY_WINDOW_SECONDS = 3.5
-SCAN_WINDOW_SECONDS = 20.0
+SAVED_ADDRESS_BUDGET = 9.0
+SAVED_HELLO_TIMEOUT = 4.5
+SCAN_WINDOW_SECONDS = 30.0  # a /18 TCP sweep measured ~15 s on Ewan's WLAN
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
@@ -455,9 +457,23 @@ def _discover_mdns(deadline, stop, on_candidate):
             sock.close()
 
 
-def _phone_at(candidate, token, deadline):
+def _hello(candidate, deadline, timeout=2, attempts=1):
+    """GET /hello, retrying once a waking phone has had time to answer."""
+    last = None
+    for _ in range(max(1, attempts)):
+        if time.monotonic() >= deadline:
+            break
+        try:
+            return request(candidate, "GET", "/hello", timeout=timeout, deadline=deadline)
+        except (OSError, RuntimeError) as error:
+            last = error
+            time.sleep(min(0.3, max(0.0, deadline - time.monotonic())))
+    raise last if last else TimeoutError("timed out")
+
+
+def _phone_at(candidate, token, deadline, hello_timeout=2, attempts=1):
     try:
-        hello = request(candidate, "GET", "/hello", timeout=2, deadline=deadline)
+        hello = _hello(candidate, deadline, hello_timeout, attempts)
         if not isinstance(hello, dict) or hello.get("name") not in ("手机直达", "猫叼"):
             return False
         if token:
@@ -507,16 +523,20 @@ def _scan_lan(token, deadline, on_progress):
     interfaces = local_interfaces(deadline=deadline)
 
     def probe(ip, timeout):
-        return _phone_at(f"http://{ip}:{lan_discovery.PORT}", None, time.monotonic() + timeout)
+        return _phone_at(f"http://{ip}:{lan_discovery.PORT}", None, time.monotonic() + timeout,
+                         hello_timeout=timeout)
 
     scan_deadline = min(deadline, time.monotonic() + SCAN_WINDOW_SECONDS)
     result = lan_discovery.scan_for_phone(
-        interfaces, probe, deadline=scan_deadline, on_progress=on_progress)
+        interfaces, probe, deadline=scan_deadline, on_progress=on_progress,
+        sweep=lan_discovery.tcp_sweep)
     if on_progress:
         print()
     if result:
         address = f"http://{result}:{lan_discovery.PORT}"
-        if _phone_at(address, token, min(deadline, time.monotonic() + 3.0)):
+        # TCP 扫到端口后仍要再验一次；刚醒的手机 /hello 约 3 秒，别用默认 2 秒超时。
+        if _phone_at(address, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                     hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
             return address
     return None
 
@@ -532,7 +552,10 @@ def discover(token=None, deadline=None, preferred_address=None, on_progress=None
     for candidate in _candidate_urls(preferred_address):
         if time.monotonic() >= deadline:
             return None
-        if _phone_at(candidate, token, min(deadline, time.monotonic() + 2.5)):
+        # The first /hello after the phone idles can take 3+ s; give the saved
+        # address a longer first timeout and one retry before falling back.
+        if _phone_at(candidate, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                     hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
             return candidate
 
     if tcp_only:
@@ -571,14 +594,17 @@ def discover(token=None, deadline=None, preferred_address=None, on_progress=None
                 batch = [item for item in found if item not in checked]
             for candidate in batch:
                 checked.add(candidate)
-                if _phone_at(candidate, token, min(listen_until, time.monotonic() + 2.5)):
+                # mDNS/广播给到的地址也可能撞上刚醒的手机，/hello 要留足 ~3+ 秒。
+                if _phone_at(candidate, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                             hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
                     return candidate
             alive = any(thread.is_alive() for thread in threads)
             if not alive:
                 with lock:
                     batch = [item for item in found if item not in checked]
                 for candidate in batch:
-                    if _phone_at(candidate, token, min(listen_until, time.monotonic() + 2.5)):
+                    if _phone_at(candidate, token, min(deadline, time.monotonic() + SAVED_ADDRESS_BUDGET),
+                                 hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
                         return candidate
                 break
             if time.monotonic() >= deadline:
@@ -871,7 +897,7 @@ def pair(address, computer_name, wait_seconds=0):
     if not address:
         raise RuntimeError(PAIR_MISS)
     try:
-        hello = request(address, "GET", "/hello", timeout=3, deadline=window)
+        hello = request(address, "GET", "/hello", timeout=SAVED_HELLO_TIMEOUT, deadline=window)
     except (OSError, RuntimeError, ValueError):
         raise RuntimeError(PAIR_MISS)
     if not isinstance(hello, dict) or hello.get("name") not in ("猫叼", "手机直达"):
@@ -907,7 +933,8 @@ def authenticated(args):
     if not token:
         raise RuntimeError("尚未连接手机。请先运行：python 手机直达.py pair")
     if args.address:
-        if not _phone_at(address, token, time.monotonic() + 3.0):
+        if not _phone_at(address, token, time.monotonic() + SAVED_ADDRESS_BUDGET,
+                         hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
             raise RuntimeError("无法验证这台已配对的手机。请检查手机显示的地址，或省略 --address 自动寻找。")
     else:
         found = discover(token, preferred_address=address, on_progress=_scan_progress)
@@ -916,10 +943,17 @@ def authenticated(args):
             if not update_pair_address(token, found):
                 raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
         else:
-            raise RuntimeError(
-                "手机暂时没有接收连接。请在手机「开始连接」页查看地址，再运行 "
-                "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
-                "可以换手机热点或家里 Wi-Fi。")
+            # 扫网失败时再给已存地址一次醒机窗口，避免刚亮屏时误报「连不上」。
+            if not _placeholder(address) and _phone_at(
+                    address, token, time.monotonic() + SAVED_ADDRESS_BUDGET,
+                    hello_timeout=SAVED_HELLO_TIMEOUT, attempts=2):
+                if not update_pair_address(token, address):
+                    raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
+            else:
+                raise RuntimeError(
+                    "手机暂时没有接收连接。请在手机「开始连接」页查看地址，再运行 "
+                    "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
+                    "可以换手机热点或家里 Wi-Fi。")
     return address, token
 
 
@@ -1020,6 +1054,33 @@ def send_file(address, token, filename):
     if reply.status >= 400:
         raise RuntimeError(data.get("error", "文件发送失败"))
     print("已发送到手机：" + data["folder"] + "/" + data["saved"])
+    note = UPDATE_NOTES.get(data.get("self_update", ""))
+    if note:
+        print(note)
+    return data
+
+
+UPDATE_NOTES = {
+    "installer_opened": "手机已弹出安装界面，请在手机上点「安装」。",
+    "tap_phone_notification": "请点手机上的猫叼通知，再点「安装」。",
+    "needs_install_permission": "请在手机上允许猫叼「安装未知应用」，然后再运行一次 update。",
+    "not_newer": "手机上的猫叼已是这个版本或更新，不用安装。",
+    "other_app": "这个 APK 不是猫叼，已只保存不安装。",
+}
+
+
+def update_app(address, token, filename):
+    data = send_file(address, token, filename)
+    if "self_update" in data:
+        return data
+    # Older phones do not auto-install; ask them to open the installer.
+    try:
+        reply = request(address, "POST", "/install", token, {})
+        print(UPDATE_NOTES.get("installer_opened" if reply.get("state") == "opened"
+                               else "tap_phone_notification"))
+    except Exception:
+        print("手机上的猫叼版本较旧：请在文件管理 → 下载/猫叼 里点这个 APK 安装。")
+    return data
 
 
 def set_wallpaper(address, token, filename):
@@ -1090,6 +1151,8 @@ def main():
     brightness.add_argument("level", type=int)
     sent = commands.add_parser("send", help="把电脑文件发送到手机下载目录")
     sent.add_argument("file")
+    updater = commands.add_parser("update", help="把新版猫叼 APK 发到手机并直接弹出安装界面")
+    updater.add_argument("apk")
     clipboard_send = commands.add_parser("clipboard-send", help="把电脑剪贴板或指定文字放入手机剪贴板")
     clipboard_send.add_argument("--text", help="要发送的文字；省略时读取电脑剪贴板")
     commands.add_parser("clipboard-listen", help="接收手机发来的文字并放入电脑剪贴板")
@@ -1107,6 +1170,13 @@ def main():
     for name in ("x1", "y1", "x2", "y2"):
         swipe.add_argument(name, type=int)
     swipe.add_argument("--duration", type=int, default=350)
+    commands.add_parser("ui", help="读出当前界面的文字与控件（密码框已遮盖）")
+    typed = commands.add_parser("type", help="在当前焦点输入框填入文字（拒绝密码框）")
+    typed.add_argument("text")
+    url = commands.add_parser("open-url", help="用指定应用打开网址，如 --app com.android.chrome")
+    url.add_argument("url"); url.add_argument("--app")
+    commands.add_parser("install", help="在手机上打开最近收到的 APK 的安装界面")
+    tap.add_argument("--respect-user", action="store_true", help="手机刚被人操作时不点按")
     args = parser.parse_args()
     if args.command == "pair":
         saved = config_read()
@@ -1122,6 +1192,8 @@ def main():
     command = args.command
     if command == "send":
         send_file(address, token, args.file); return
+    if command == "update":
+        update_app(address, token, args.apk); return
     if command == "clipboard-send":
         send_clipboard_text(address, token,
                             args.text if args.text is not None else read_windows_clipboard())
@@ -1143,14 +1215,24 @@ def main():
         for item in result:
             print(item["name"] + "\t" + item["package"])
         return
+    if command == "ui":
+        print(json.dumps(request(address, "GET", "/ui", token), ensure_ascii=False, indent=2))
+        return
     if command == "open":
         path, body = "/open", {"package": args.package}
+    elif command == "type":
+        path, body = "/action", {"type": "set_text", "text": args.text}
+    elif command == "open-url":
+        path, body = "/open-url", {"url": args.url, **({"package": args.app} if args.app else {})}
+    elif command == "install":
+        path, body = "/install", {}
     elif command == "volume":
         path, body = "/volume", {"channel": "ring" if args.ring else "media", "level": args.level}
     elif command == "brightness":
         path, body = "/brightness", {"level": args.level}
     elif command == "tap":
-        path, body = "/action", {"type": "tap", "x": args.x, "y": args.y}
+        path, body = "/action", {"type": "tap", "x": args.x, "y": args.y,
+                                  "respect_user": bool(args.respect_user)}
     elif command == "swipe":
         path, body = "/action", {"type": "swipe", "x1": args.x1, "y1": args.y1,
                                   "x2": args.x2, "y2": args.y2, "duration_ms": args.duration}

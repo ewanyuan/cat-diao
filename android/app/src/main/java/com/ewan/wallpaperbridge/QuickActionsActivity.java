@@ -73,6 +73,16 @@ public class QuickActionsActivity extends Activity {
             startActivity(new Intent(this, MainActivity.class));
             finish();
         });
+
+        TextView hideCat = label("关闭悬浮猫", 13, MUTED, false);
+        hideCat.setGravity(Gravity.CENTER);
+        hideCat.setPadding(0, dp(14), 0, 0);
+        body.addView(hideCat);
+        hideCat.setOnClickListener(view -> {
+            BridgeService.setOverlay(this, false);
+            Toast.makeText(this, "悬浮猫已关闭，可在猫叼「更多」里重新打开", Toast.LENGTH_LONG).show();
+            finish();
+        });
         setContentView(body);
     }
 
@@ -110,7 +120,7 @@ public class QuickActionsActivity extends Activity {
             Toast.makeText(this, "已叼在嘴里，连上小窝后自动送达", Toast.LENGTH_LONG).show();
             finish();
         } catch (Exception error) {
-            Toast.makeText(this, "收藏失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "收藏没成功，请再试一次", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -136,7 +146,7 @@ public class QuickActionsActivity extends Activity {
             MainActivity.sendSelectedFileToComputer(this);
             finish();
         } catch (Exception error) {
-            Toast.makeText(this, "文件授权失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "这个文件打不开，请换一个再试", Toast.LENGTH_LONG).show();
         }
     }
 

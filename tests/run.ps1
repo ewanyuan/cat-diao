@@ -17,7 +17,7 @@ Push-Location $repository
 try {
     New-Item -ItemType Directory -Path $classes -Force | Out-Null
     $sources = @('ComputerConnection', 'LocalBridgeServer', 'PairingGate', 'CaptureBatch', 'BluetoothWire',
-        'RequestAuth', 'PairingExchange', 'LanPolicy', 'ReconnectSchedule', 'RoutePolicy', 'PermissionGuide',
+        'RequestAuth', 'PairingExchange', 'LanPolicy', 'ReconnectSchedule', 'RoutePolicy', 'PermissionGuide', 'OverlayMath',
         'FirstConnection', 'QrCode') |
         ForEach-Object { 'android/app/src/main/java/com/ewan/wallpaperbridge/' + $_ + '.java' }
     $sources += @('tests/ComputerConnectionTest.java', 'tests/CatDiaoEdgeTest.java', 'tests/BluetoothWireTest.java',

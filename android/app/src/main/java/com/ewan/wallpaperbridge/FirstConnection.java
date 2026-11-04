@@ -5,12 +5,14 @@ public final class FirstConnection {
     public static final String SERVICE_TYPE = "_catdiao._tcp";
     public static final int PHONE_PORT = 8767;
     public static final String PC_COMMAND = "run.ps1 pair";
-    public static final String AI_LINE = "请运行 cat-diao 的 scripts\\run.ps1 pair；找不到时运行 run.ps1 pair --address http://IP:8767（IP 换成手机显示的地址）。";
+    /** Short line a person pastes to an AI tool. Address is appended when known. */
+    public static final String AI_LINE = "用猫叼连上我这台手机";
+    public static final String QR_HINT = "截图这个二维码发给 AI";
     public static final String BLUETOOTH_LOCKED = "先连上电脑，再设置蓝牙备用。";
     public static final String[] CAUSES = {
             "手机和电脑需要连在同一个可互访的 Wi-Fi。",
             "公司或公共 Wi-Fi 可能隔离设备。可以让手机开热点，电脑连上热点，或换家里 Wi-Fi。",
-            "自动寻找失败时，可用手机显示的地址运行：run.ps1 pair --address http://IP:8767。"
+            "还是不行时，把本页短话或二维码截图发给电脑上的 AI；或打开「高级」自己连接。"
     };
 
     public enum State { NOT_PAIRED, WAITING, PAIRING, PAIRED, PROBLEMS }
@@ -83,6 +85,12 @@ public final class FirstConnection {
 
     private FirstConnection() {}
 
+    /** One short sentence an AI can act on. Embeds the phone URL when known. */
+    public static String aiLine(String address) {
+        if (address != null && address.startsWith("http://")) return AI_LINE + "：" + address;
+        return AI_LINE;
+    }
+
     public static Screen present(Facts facts) {
         String code = facts.confirmCode.trim();
         if (code.length() == 6 && code.chars().allMatch(Character::isDigit)) return pairing(code);
@@ -101,9 +109,10 @@ public final class FirstConnection {
 
     private static Screen waiting(String address) {
         return new Screen(State.WAITING, "等电脑",
-                "在电脑上运行下面这一行。找不到时，用本页地址重试。",
+                "任选一种发给电脑上的 AI，人不用管。",
                 "复制这句话", "copy", "还是连不上", "problems",
-                false, BLUETOOTH_LOCKED, AI_LINE, address, true, true, how(), "", new String[0], false, "");
+                false, BLUETOOTH_LOCKED, aiLine(address), address, false, true,
+                advanced(address), "", new String[0], false, "");
     }
 
     private static Screen pairing(String code) {
@@ -124,14 +133,22 @@ public final class FirstConnection {
     private static Screen problems(String address) {
         return new Screen(State.PROBLEMS, "还没连上", "先看是不是下面一种情况。",
                 "再试一次", "retry", "", "",
-                false, BLUETOOTH_LOCKED, "", address, true, true, "", "", CAUSES, false, "");
+                false, BLUETOOTH_LOCKED, aiLine(address), address, false, true,
+                advanced(address), "", CAUSES, false, "");
     }
 
-    public static String how() {
-        return "手机和电脑连同一个 Wi-Fi。\n"
-                + "在电脑上打开 PowerShell，运行 scripts\\run.ps1 pair。\n"
-                + "如果找不到手机，用本页地址运行 run.ps1 pair --address http://IP:8767。\n"
-                + "也可以把上面那句话发给电脑上的 AI 工具。\n"
+    /** Manual PowerShell / address — collapsed under 「高级」, not the main path. */
+    public static String advanced(String address) {
+        String addr = (address != null && address.startsWith("http://")) ? address : "http://手机IP:8767";
+        return "自己在电脑上操作时：\n"
+                + "运行 scripts\\" + PC_COMMAND + "\n"
+                + "找不到时运行 scripts\\" + PC_COMMAND + " --address " + addr + "\n"
                 + "手机上会出现 6 位数字。和电脑上的一样，再点允许。";
+    }
+
+    /** @deprecated kept for older call sites; use {@link #advanced(String)}. */
+    @Deprecated
+    public static String how() {
+        return advanced("http://IP:8767");
     }
 }
