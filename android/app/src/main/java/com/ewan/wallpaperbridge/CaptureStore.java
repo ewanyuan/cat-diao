@@ -27,7 +27,7 @@ final class CaptureStore extends SQLiteOpenHelper {
 
     String save(String source, String value) {
         String text = value == null ? "" : value.trim();
-        if (text.isEmpty()) throw new IllegalArgumentException("没有可收藏的文字或链接");
+        if (text.isEmpty()) throw new IllegalArgumentException("empty");
         if (text.length() > 30000) text = text.substring(0, 30000);
         Matcher match = URL.matcher(text);
         String url = match.find() ? match.group() : "";

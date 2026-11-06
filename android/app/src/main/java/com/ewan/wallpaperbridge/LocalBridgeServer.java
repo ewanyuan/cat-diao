@@ -72,10 +72,10 @@ final class LocalBridgeServer implements AutoCloseable {
             int ending = 0;
             while (bytes.size() < 8192) {
                 long left = TimeUnit.NANOSECONDS.toMillis(headerDeadline - System.nanoTime());
-                if (left <= 0) throw new SocketTimeoutException("请求头接收超时");
+                if (left <= 0) throw new SocketTimeoutException("ce:header_timeout");
                 socket.setSoTimeout((int) Math.max(1, left));
                 int value = input.read();
-                if (value < 0) throw new IOException("请求头未传完");
+                if (value < 0) throw new IOException("ce:header_cut");
                 bytes.write(value);
                 ending = (ending << 8) | value;
                 if (ending == 0x0d0a0d0a) {
@@ -85,7 +85,7 @@ final class LocalBridgeServer implements AutoCloseable {
                     return new String(bytes.toByteArray(), StandardCharsets.US_ASCII);
                 }
             }
-            throw new IOException("请求头过长");
+            throw new IOException("ce:header_long");
         }
 
         @Override public void close() {

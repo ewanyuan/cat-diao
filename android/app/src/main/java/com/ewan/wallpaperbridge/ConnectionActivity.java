@@ -27,7 +27,7 @@ import java.net.NetworkInterface;
 import java.util.Enumeration;
 
 /** One step of first connection. The copy comes from {@link FirstConnection}. */
-public class ConnectionActivity extends Activity {
+public class ConnectionActivity extends CatDiaoActivity {
     private static final int CREAM = Color.rgb(250, 247, 241);
     private static final int PAPER = Color.WHITE;
     private static final int INK = Color.rgb(61, 52, 47);
@@ -92,7 +92,7 @@ public class ConnectionActivity extends Activity {
         long syncedAt = getSharedPreferences("bridge", MODE_PRIVATE).getLong("capture_sync_last_success_at", 0);
         String sync = syncedAt <= 0 ? "" : android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(syncedAt));
         FirstConnection.Screen screen = FirstConnection.present(new FirstConnection.Facts(
-                !trusted.isEmpty(), askedToWait, askedForHelp, code, name, sync, localAddress()));
+                !trusted.isEmpty(), askedToWait, askedForHelp, code, name, sync, localAddress()), phrases());
         String signature = screen.state + screen.code + screen.sentence + howOpen + screen.detail + screen.copyText + screen.address;
         if (signature.equals(rendered) && getWindow().getDecorView().findViewById(android.R.id.content) != null
                 && rendered.length() > 0) {
@@ -113,7 +113,7 @@ public class ConnectionActivity extends Activity {
         page.setPadding(dp(22), dp(18), dp(22), dp(28));
         scroll.addView(page);
 
-        TextView back = label("关闭", 14, MUTED, false);
+        TextView back = label(getString(R.string.conn_close), 14, MUTED, false);
         back.setOnClickListener(v -> finish());
         page.addView(back);
 
@@ -145,13 +145,13 @@ public class ConnectionActivity extends Activity {
             LinearLayout.LayoutParams cardLayout = new LinearLayout.LayoutParams(-1, -2);
             cardLayout.topMargin = dp(16);
             page.addView(card, cardLayout);
-            TextView tip = label("复制后发给电脑上的 AI 即可。", 13, MUTED, false);
+            TextView tip = label(getString(R.string.conn_copy_tip), 13, MUTED, false);
             tip.setPadding(0, dp(6), 0, 0);
             page.addView(tip);
         }
         if (!screen.primary.isEmpty() && "copy".equals(screen.primaryAction)) {
             Button primary = button(screen.primary, true);
-            LinearLayout.LayoutParams primaryLayout = new LinearLayout.LayoutParams(-1, dp(52));
+            LinearLayout.LayoutParams primaryLayout = new LinearLayout.LayoutParams(-1, -2);
             primaryLayout.topMargin = dp(12);
             page.addView(primary, primaryLayout);
             primary.setOnClickListener(v -> act(screen.primaryAction, request));
@@ -159,17 +159,17 @@ public class ConnectionActivity extends Activity {
 
         // Path 2: QR screenshot for AI — payload is only the address URL
         if (screen.showQr && screen.address.startsWith("http://")) {
-            TextView qrHint = label(FirstConnection.QR_HINT, 16, INK, true);
+            TextView qrHint = label(getString(R.string.conn_qr_hint), 16, INK, true);
             qrHint.setPadding(0, dp(18), 0, 0);
             page.addView(qrHint);
-            TextView qrTip = label("AI 从图里读出地址再配对。", 13, MUTED, false);
+            TextView qrTip = label(getString(R.string.conn_qr_tip), 13, MUTED, false);
             qrTip.setPadding(0, dp(6), 0, 0);
             page.addView(qrTip);
             try {
                 boolean[][] matrix = QrCode.encode(screen.address);
                 ImageView image = new ImageView(this);
                 image.setImageBitmap(bitmap(matrix));
-                image.setContentDescription("连接地址二维码");
+                image.setContentDescription(getString(R.string.conn_qr_cd));
                 LinearLayout.LayoutParams qr = new LinearLayout.LayoutParams(dp(200), dp(200));
                 qr.topMargin = dp(10);
                 qr.gravity = Gravity.CENTER_HORIZONTAL;
@@ -185,7 +185,7 @@ public class ConnectionActivity extends Activity {
 
         // Advanced: PowerShell / hand-typed IP — not the main path
         if (!screen.how.isEmpty()) {
-            TextView toggle = label(howOpen ? "收起高级" : "高级", 14, CORAL_DARK, true);
+            TextView toggle = label(getString(howOpen ? R.string.conn_advanced_hide : R.string.conn_advanced_show), 14, CORAL_DARK, true);
             toggle.setPadding(0, dp(16), 0, 0);
             toggle.setOnClickListener(v -> {
                 howOpen = !howOpen;
@@ -199,7 +199,7 @@ public class ConnectionActivity extends Activity {
                     address.setPadding(0, dp(10), 0, 0);
                     address.setTextIsSelectable(true);
                     page.addView(address);
-                    TextView copyAddress = label("复制地址", 14, CORAL_DARK, true);
+                    TextView copyAddress = label(getString(R.string.conn_copy_address), 14, CORAL_DARK, true);
                     copyAddress.setPadding(0, dp(8), 0, 0);
                     copyAddress.setOnClickListener(v -> copy(screen.address));
                     page.addView(copyAddress);
@@ -213,14 +213,14 @@ public class ConnectionActivity extends Activity {
         // Non-copy primary (allow / retry / start / done)
         if (!screen.primary.isEmpty() && !"copy".equals(screen.primaryAction)) {
             Button primary = button(screen.primary, true);
-            LinearLayout.LayoutParams primaryLayout = new LinearLayout.LayoutParams(-1, dp(52));
+            LinearLayout.LayoutParams primaryLayout = new LinearLayout.LayoutParams(-1, -2);
             primaryLayout.topMargin = dp(22);
             page.addView(primary, primaryLayout);
             primary.setOnClickListener(v -> act(screen.primaryAction, request));
         }
         if (!screen.secondary.isEmpty()) {
             Button secondary = button(screen.secondary, false);
-            LinearLayout.LayoutParams secondaryLayout = new LinearLayout.LayoutParams(-1, dp(48));
+            LinearLayout.LayoutParams secondaryLayout = new LinearLayout.LayoutParams(-1, -2);
             secondaryLayout.topMargin = dp(10);
             page.addView(secondary, secondaryLayout);
             secondary.setOnClickListener(v -> act(screen.secondaryAction, request));
@@ -243,11 +243,11 @@ public class ConnectionActivity extends Activity {
             askedForHelp = false;
             askedToWait = true;
         } else if ("copy".equals(action)) {
-            copy(FirstConnection.aiLine(localAddress()));
+            copy(FirstConnection.aiLine(phrases(), localAddress()));
             return;
         } else if ("allow".equals(action) || "deny".equals(action)) {
             if (request == null || !BridgeService.decidePair(this, request.id, "allow".equals(action))) {
-                Toast.makeText(this, "这条连接请求已失效，请从电脑重新发起", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, R.string.conn_pair_expired, Toast.LENGTH_LONG).show();
             } else if ("allow".equals(action)) {
                 BridgeService.requestCaptureSync();
             }
@@ -271,7 +271,7 @@ public class ConnectionActivity extends Activity {
             startForegroundService(new Intent(this, BridgeService.class));
             startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
         } catch (Exception error) {
-            Toast.makeText(this, "请在手机设置中打开蓝牙", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_bt_settings_fail, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -283,7 +283,7 @@ public class ConnectionActivity extends Activity {
     private void copy(String value) {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard != null) clipboard.setPrimaryClip(ClipData.newPlainText("catdiao", value));
-        Toast.makeText(this, "已复制", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.conn_copied, Toast.LENGTH_SHORT).show();
     }
 
     private Bitmap bitmap(boolean[][] matrix) {
@@ -323,7 +323,20 @@ public class ConnectionActivity extends Activity {
             }
             if (fallback != null) return "http://" + fallback + ":" + FirstConnection.PHONE_PORT;
         } catch (Exception ignored) { }
-        return "请先连上和电脑相同的 Wi-Fi";
+        return getString(R.string.conn_need_wifi);
+    }
+
+    private FirstConnection.Copy phrases() {
+        return new FirstConnection.Copy() {
+            @Override public String t(String key) { return text(key); }
+            @Override public String f(String key, Object... args) { return text(key, args); }
+        };
+    }
+
+    private String text(String key, Object... args) {
+        int id = getResources().getIdentifier(key, "string", getPackageName());
+        if (id == 0) throw new IllegalStateException(key);
+        return args.length == 0 ? getString(id) : getString(id, args);
     }
 
     private TextView label(String value, int size, int color, boolean bold) {
@@ -341,6 +354,9 @@ public class ConnectionActivity extends Activity {
         button.setText(value);
         button.setAllCaps(false);
         button.setTextSize(16);
+        button.setSingleLine(false);
+        button.setMaxLines(2);
+        button.setMinHeight(dp(48));
         button.setTextColor(primary ? Color.WHITE : CORAL_DARK);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         button.setBackground(round(primary ? CORAL : PAPER, primary ? CORAL : BORDER, 14));

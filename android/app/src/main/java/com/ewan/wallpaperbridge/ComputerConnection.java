@@ -72,7 +72,7 @@ final class ComputerConnection implements AutoCloseable {
 
         int timeout(int maximumMs) throws IOException {
             long left = TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime());
-            if (cancelled || left <= 0) throw new IOException("连接检查已结束");
+            if (cancelled || left <= 0) throw new IOException("ce:ended");
             return (int) Math.max(1, Math.min(maximumMs, left));
         }
 
@@ -134,7 +134,7 @@ final class ComputerConnection implements AutoCloseable {
 
     synchronized Snapshot snapshot() {
         if (active != null && System.nanoTime() >= active.deadlineNanos)
-            finish(active, false, "本次连接检查超时，未收到电脑确认。");
+            finish(active, false, "ce:timeout");
         return new Snapshot(result.phase, result.startedAt, result.finishedAt,
                 active == null ? 0 : active.deadlineNanos, result.error, active != null,
                 active == null ? 0 : active.startedAt);
@@ -158,7 +158,7 @@ final class ComputerConnection implements AutoCloseable {
             listener.changed(snapshot());
         }
         attempt.watchdog = timers.schedule(() -> {
-            finish(attempt, false, "本次连接检查超时，未收到电脑确认。");
+            finish(attempt, false, "ce:timeout");
         }, timeoutMs, TimeUnit.MILLISECONDS);
         worker.execute(() -> {
             try {
@@ -166,7 +166,7 @@ final class ComputerConnection implements AutoCloseable {
                 finish(attempt, true, "");
             } catch (Exception error) {
                 String detail = error instanceof CheckFailure ? error.getMessage()
-                        : "电脑接收程序没有响应。";
+                        : "ce:no_response";
                 finish(attempt, false, detail);
             }
         });
@@ -176,7 +176,7 @@ final class ComputerConnection implements AutoCloseable {
         if (closed || active != attempt) return;
         if (System.nanoTime() >= attempt.deadlineNanos) {
             connected = false;
-            error = "本次连接检查超时，未收到电脑确认。";
+            error = "ce:timeout";
             cancelAsync(attempt);
         }
         active = null;
@@ -224,21 +224,21 @@ final class ComputerConnection implements AutoCloseable {
 
     static void probe(String address, int port, String token, Attempt attempt) throws Exception {
         if (address.isEmpty() || token.isEmpty()) {
-            throw new CheckFailure("还没有可用的电脑连接信息，请查看「小窝连接」。");
+            throw new CheckFailure("ce:no_address");
         }
         Reply reply = exchange(address, port, "GET", "/connection-check", token, null, attempt);
-        if (reply.code == 404) throw new CheckFailure("电脑接收程序需要更新，才能确认本次连接。");
-        if (reply.code == 401 || reply.code == 403) throw new CheckFailure("电脑没有确认当前配对，请查看「小窝连接」。");
-        if (reply.code != 200) throw new CheckFailure("电脑返回了 HTTP " + reply.code + "，本次没有连上。");
+        if (reply.code == 404) throw new CheckFailure("ce:receiver_outdated");
+        if (reply.code == 401 || reply.code == 403) throw new CheckFailure("ce:pair_rejected");
+        if (reply.code != 200) throw new CheckFailure("ce:http:" + reply.code);
         attempt.timeout(1);
     }
 
     static Reply exchange(String address, int port, String method, String path,
                           String token, byte[] payload, Attempt attempt) throws Exception {
-        if (!address.matches("[0-9.]+")) throw new CheckFailure("电脑连接地址不可用。");
+        if (!address.matches("[0-9.]+")) throw new CheckFailure("ce:bad_address");
         InetAddress peer = InetAddress.getByName(address);
         if (!LanPolicy.allows(peer)) {
-            throw new CheckFailure("电脑连接地址不在局域网内。");
+            throw new CheckFailure("ce:not_lan");
         }
         Socket socket = new Socket();
         attempt.socket = socket;
@@ -263,10 +263,10 @@ final class ComputerConnection implements AutoCloseable {
             String[] headers = readHeaders(socket, attempt).split("\r\n");
             String[] status = headers[0].split(" ", 3);
             if (status.length < 2 || !status[0].startsWith("HTTP/"))
-                throw new CheckFailure("电脑没有返回有效的连接确认。");
+                throw new CheckFailure("ce:bad_confirm");
             int code;
             try { code = Integer.parseInt(status[1]); }
-            catch (NumberFormatException error) { throw new CheckFailure("电脑没有返回有效的连接确认。"); }
+            catch (NumberFormatException error) { throw new CheckFailure("ce:bad_confirm"); }
             Map<String, String> fields = new HashMap<>();
             for (int index = 1; index < headers.length; index++) {
                 int colon = headers[index].indexOf(':');
@@ -277,21 +277,21 @@ final class ComputerConnection implements AutoCloseable {
             if (fields.containsKey("content-length")) {
                 int expected;
                 try { expected = Integer.parseInt(fields.get("content-length")); }
-                catch (NumberFormatException error) { throw new CheckFailure("电脑没有返回完整的确认。"); }
-                if (expected < 0 || expected > 65536) throw new CheckFailure("电脑返回的确认大小不正确。");
+                catch (NumberFormatException error) { throw new CheckFailure("ce:incomplete"); }
+                if (expected < 0 || expected > 65536) throw new CheckFailure("ce:confirm_size");
                 body = new byte[expected];
                 int received = 0;
                 InputStream input = socket.getInputStream();
                 while (received < expected) {
                     socket.setSoTimeout(attempt.timeout(6000));
                     int count = input.read(body, received, expected - received);
-                    if (count < 0) throw new CheckFailure("电脑的确认没有传完，请稍后重试。");
+                    if (count < 0) throw new CheckFailure("ce:truncated");
                     received += count;
                 }
             }
             if (code >= 200 && code < 300 && !RequestAuth.responseOk(
                     token, signed.nonce, code, body, fields.get("x-catdiao-sig"))) {
-                throw new CheckFailure("电脑没有返回有效的配对确认，本次没有连上。");
+                throw new CheckFailure("ce:bad_pair");
             }
             attempt.timeout(1);
             return new Reply(code, fields, body);
@@ -309,11 +309,11 @@ final class ComputerConnection implements AutoCloseable {
             // Recompute the total remaining time for every read, even when bytes keep arriving.
             socket.setSoTimeout(attempt.timeout(6000));
             int value = input.read();
-            if (value < 0) throw new CheckFailure("电脑没有返回完整的连接确认。");
+            if (value < 0) throw new CheckFailure("ce:incomplete");
             bytes.write(value);
             ending = (ending << 8) | value;
             if (ending == 0x0d0a0d0a) return new String(bytes.toByteArray(), StandardCharsets.US_ASCII);
         }
-        throw new CheckFailure("电脑返回的连接确认过长，本次没有连上。");
+        throw new CheckFailure("ce:confirm_long");
     }
 }

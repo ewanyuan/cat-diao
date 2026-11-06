@@ -17,14 +17,14 @@ Push-Location $repository
 try {
     New-Item -ItemType Directory -Path $classes -Force | Out-Null
     $sources = @('ComputerConnection', 'LocalBridgeServer', 'PairingGate', 'CaptureBatch', 'BluetoothWire',
-        'RequestAuth', 'PairingExchange', 'LanPolicy', 'ReconnectSchedule', 'RoutePolicy', 'PermissionGuide', 'OverlayMath',
+        'RequestAuth', 'PairingExchange', 'LanPolicy', 'ReconnectSchedule', 'RoutePolicy', 'OverlayMath', 'OverlayPolicy', 'LocalePolicy',
         'FirstConnection', 'QrCode') |
         ForEach-Object { 'android/app/src/main/java/com/ewan/wallpaperbridge/' + $_ + '.java' }
     $sources += @('tests/ComputerConnectionTest.java', 'tests/CatDiaoEdgeTest.java', 'tests/BluetoothWireTest.java',
-        'tests/SecurityPolicyTest.java', 'tests/FirstConnectionTest.java')
+        'tests/SecurityPolicyTest.java', 'tests/FirstConnectionTest.java', 'tests/LocaleAndOverlayTest.java')
     & $javac -encoding UTF-8 -d $classes @sources
     if ($LASTEXITCODE -ne 0) { throw 'Java checks could not compile.' }
-    foreach ($check in @('CatDiaoEdgeTest', 'ComputerConnectionTest', 'BluetoothWireTest', 'SecurityPolicyTest', 'FirstConnectionTest')) {
+    foreach ($check in @('CatDiaoEdgeTest', 'ComputerConnectionTest', 'BluetoothWireTest', 'SecurityPolicyTest', 'FirstConnectionTest', 'LocaleAndOverlayTest')) {
         & $java -cp $classes ('com.ewan.wallpaperbridge.' + $check)
         if ($LASTEXITCODE -ne 0) { throw "Java check failed: $check" }
     }

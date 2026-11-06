@@ -1,51 +1,60 @@
 package com.ewan.wallpaperbridge;
 
 public final class FirstConnectionTest {
+    private static final FirstConnection.Copy COPY = new FirstConnection.Copy() {
+        @Override public String t(String key) { return key; }
+        @Override public String f(String key, Object... args) {
+            StringBuilder out = new StringBuilder(key);
+            for (Object arg : args) out.append('|').append(arg);
+            return out.toString();
+        }
+    };
+
     public static void main(String[] args) {
-        FirstConnection.Screen fresh = FirstConnection.present(facts(false, false, false, "", "", "", ""));
+        FirstConnection.Screen fresh = FirstConnection.present(facts(false, false, false, "", "", "", ""), COPY);
         require(fresh.state == FirstConnection.State.NOT_PAIRED, "start unpaired");
-        require(fresh.sentence.length() < 40, "one short sentence");
+        require(fresh.sentence.equals("conn_not_paired_body"), "one short sentence key");
         require("start".equals(fresh.primaryAction), "one primary action");
         require(!fresh.bluetoothEnabled, "bluetooth stays off");
-        require(fresh.bluetoothReason.equals(FirstConnection.BLUETOOTH_LOCKED), "one-line reason");
+        require(fresh.bluetoothReason.equals("conn_bt_locked"), "one-line reason");
         require(fresh.secondary.isEmpty(), "no dead-end second button");
 
         FirstConnection.Screen waiting = FirstConnection.present(
-                facts(false, true, false, "", "", "", "http://10.69.1.253:8767"));
+                facts(false, true, false, "", "", "", "http://10.69.1.253:8767"), COPY);
         require(waiting.state == FirstConnection.State.WAITING, "waiting");
-        require(waiting.copyText.equals(FirstConnection.aiLine("http://10.69.1.253:8767")), "copyable line");
-        require(waiting.copyText.startsWith(FirstConnection.AI_LINE), "short AI sentence");
+        require(waiting.copyText.equals(FirstConnection.aiLine(COPY, "http://10.69.1.253:8767")), "copyable line");
+        require(waiting.copyText.startsWith("conn_ai_line_with_address|"), "short AI sentence");
         require(waiting.copyText.contains("http://10.69.1.253:8767"), "embeds phone address");
         require(!waiting.copyText.contains(FirstConnection.PC_COMMAND), "PowerShell not in main copy");
         require(waiting.address.equals("http://10.69.1.253:8767"), "phone address");
         require(waiting.showQr, "qr when the computer must be told the address");
         require(!waiting.showAddress, "address stays under advanced");
-        require(waiting.how.contains(FirstConnection.PC_COMMAND) && waiting.how.contains("允许"), "advanced expands");
+        require(waiting.how.contains(FirstConnection.PC_COMMAND), "advanced keeps the command");
         require(waiting.how.contains("http://10.69.1.253:8767"), "advanced keeps address");
+        require(waiting.how.startsWith("conn_advanced|"), "advanced is a formatted string");
         require(!waiting.bluetoothEnabled, "still no bluetooth");
-        require(waiting.sentence.contains("任选一种"), "two equal main paths");
+        require(waiting.sentence.equals("conn_waiting_body"), "two equal main paths");
 
         FirstConnection.Screen pairing = FirstConnection.present(
-                facts(false, true, true, "302041", "书房", "", "http://10.69.1.253:8767"));
+                facts(false, true, true, "302041", "书房", "", "http://10.69.1.253:8767"), COPY);
         require(pairing.state == FirstConnection.State.PAIRING, "code wins over help");
         require(pairing.code.equals("302041"), "big code");
         require("allow".equals(pairing.primaryAction) && "deny".equals(pairing.secondaryAction), "allow or deny");
         require(pairing.bluetoothReason.isEmpty(), "pairing hides bluetooth");
 
         FirstConnection.Screen paired = FirstConnection.present(
-                facts(true, false, false, "", "书房电脑", "刚刚送到", ""));
+                facts(true, false, false, "", "书房电脑", "刚刚送到", ""), COPY);
         require(paired.state == FirstConnection.State.PAIRED && paired.green, "paired is green");
         require(paired.sentence.contains("书房电脑"), "pc name");
         require(paired.detail.contains("刚刚送到"), "last sync");
         require(paired.bluetoothEnabled && "bluetooth".equals(paired.secondaryAction), "bluetooth only after pairing");
 
         FirstConnection.Screen problems = FirstConnection.present(
-                facts(false, true, true, "", "", "", "http://10.69.1.253:8767"));
+                facts(false, true, true, "", "", "", "http://10.69.1.253:8767"), COPY);
         require(problems.state == FirstConnection.State.PROBLEMS, "problems");
         require(problems.causes.length == 3, "three causes");
-        String joined = String.join("\n", problems.causes);
-        require(joined.contains("同一个可互访的 Wi-Fi") && joined.contains("热点")
-                && joined.contains("公共 Wi-Fi") && joined.contains("高级"), "plain causes");
+        require(problems.causes[0].equals("conn_cause_wifi") && problems.causes[1].equals("conn_cause_hotspot")
+                && problems.causes[2].equals("conn_cause_advanced"), "plain causes");
         require("retry".equals(problems.primaryAction), "back to waiting");
         require(problems.showQr && !problems.showAddress, "qr main, address in advanced");
         require(problems.copyText.contains("http://10.69.1.253:8767"), "problems keeps AI line");
