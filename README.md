@@ -8,13 +8,13 @@ A local network companion for Android and Windows. Save links, move text and fil
 
 <table>
   <tr>
-    <td align="center"><a href="docs/images/home-preview.png"><img src="docs/images/home-preview.png" alt="猫叼首页预览 / Home preview" width="210"></a><br>首页 / Home</td>
-    <td align="center"><a href="docs/images/save-preview.png"><img src="docs/images/save-preview.png" alt="收藏内容预览 / Save preview" width="210"></a><br>收藏内容 / Save</td>
-    <td align="center"><a href="docs/images/quick-actions-preview.png"><img src="docs/images/quick-actions-preview.png" alt="悬浮快捷面板预览 / Quick actions preview" width="210"></a><br>悬浮快捷面板 / Quick actions</td>
+    <td align="center"><a href="docs/images/home-preview.png"><img src="docs/images/home-preview.png" alt="首页 / Home" width="210"></a><br>首页 / Home</td>
+    <td align="center"><a href="docs/images/save-preview.png"><img src="docs/images/save-preview.png" alt="小窝连接，已连上 / Nest connection" width="210"></a><br>小窝连接 / Nest connection</td>
+    <td align="center"><a href="docs/images/quick-actions-preview.png"><img src="docs/images/quick-actions-preview.png" alt="悬浮快捷面板 / Quick actions" width="210"></a><br>悬浮快捷面板 / Quick actions</td>
   </tr>
 </table>
 
-界面预览根据应用界面绘制，并非手机实拍。点击图片可放大。 / These are UI previews, not photos of a running phone. Click to enlarge.
+以上为手机实拍界面，点击图片可放大。 / Screenshots from a real phone. Click to enlarge.
 
 ## 中文
 
