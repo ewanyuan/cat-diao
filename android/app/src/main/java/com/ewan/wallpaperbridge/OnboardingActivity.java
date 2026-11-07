@@ -13,7 +13,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-public class OnboardingActivity extends Activity {
+public class OnboardingActivity extends CatDiaoActivity {
     private static final int CREAM = Color.rgb(250, 247, 241);
     private static final int PAPER = Color.WHITE;
     private static final int INK = Color.rgb(61, 52, 47);
@@ -75,11 +75,11 @@ public class OnboardingActivity extends Activity {
         cat.setImageResource(getResources().getIdentifier("cat_diao_launcher", "drawable", getPackageName()));
         cat.setScaleType(ImageView.ScaleType.FIT_CENTER);
         top.addView(cat, new LinearLayout.LayoutParams(dp(32), dp(32)));
-        TextView brand = label("猫叼", 16, INK, true);
-        brand.setPadding(dp(7), 0, 0, 0);
+        TextView brand = label(getString(R.string.app_name), 16, INK, true);
+        brand.setPaddingRelative(dp(7), 0, 0, 0);
         top.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView skip = label("跳过", 13, MUTED, false);
-        skip.setPadding(dp(12), dp(8), 0, dp(8));
+        TextView skip = label(getString(R.string.onb_skip), 13, MUTED, false);
+        skip.setPaddingRelative(dp(12), dp(8), 0, dp(8));
         top.addView(skip);
         skip.setOnClickListener(view -> finishGuide());
 
@@ -106,7 +106,7 @@ public class OnboardingActivity extends Activity {
         illustrationLayout.topMargin = dp(18);
         content.addView(illustration, illustrationLayout);
 
-        String[] titles = {"猫叼是什么", "怎么收藏", "还能做什么"};
+        String[] titles = {getString(R.string.onb_title_1), getString(R.string.onb_title_2), getString(R.string.onb_title_3)};
         TextView title = label(titles[page], 22, INK, true);
         LinearLayout.LayoutParams titleLayout = new LinearLayout.LayoutParams(-1, -2);
         titleLayout.topMargin = dp(22);
@@ -114,19 +114,19 @@ public class OnboardingActivity extends Activity {
 
         LinearLayout panel = panel(content);
         if (page == 0) {
-            row(panel, "猫", "手机上的这个 App。", true);
-            row(panel, "叼", "收藏先存在手机，连上小窝再发送。", false);
-            row(panel, "小窝", "你的电脑。", false);
+            row(panel, getString(R.string.onb_h_cat), getString(R.string.onb_d_cat), true);
+            row(panel, getString(R.string.onb_h_carry), getString(R.string.onb_d_carry), false);
+            row(panel, getString(R.string.onb_h_nest), getString(R.string.onb_d_nest), false);
         } else if (page == 1) {
-            row(panel, "分享", "在文章里点「分享」，选「猫叼」。", true);
-            row(panel, "复制", "复制内容后点悬浮猫，再点收藏。长按悬浮猫可关闭它。", false);
-            note(content, "显示「已叼在嘴里」，就是还没送到小窝。");
+            row(panel, getString(R.string.onb_h_share), getString(R.string.onb_d_share), true);
+            row(panel, getString(R.string.onb_h_copy), getString(R.string.onb_d_copy), false);
+            note(content, getString(R.string.onb_note_held));
         } else {
-            row(panel, "发到小窝", "把复制的文字发到小窝剪贴板，或选文件发送。", true);
-            row(panel, "操作手机", "在电脑上的 AI 工具（如 Codex）里查看手机、操作屏幕、换壁纸，也能把文字和文件发回手机。", false);
-            note(content, "点首页「开始连接」，手机和电脑显示同样 6 位数字时点允许。");
-            note(content, "收藏不用开权限。要让电脑看和点手机，再按提示开屏幕控制。");
-            note(content, "换了 Wi-Fi 不用重新配对，回到同一网络会自动连上。");
+            row(panel, getString(R.string.onb_h_send), getString(R.string.onb_d_send), true);
+            row(panel, getString(R.string.onb_h_control), getString(R.string.onb_d_control), false);
+            note(content, getString(R.string.onb_note_pair));
+            note(content, getString(R.string.onb_note_perm));
+            note(content, getString(R.string.onb_note_wifi));
         }
 
         LinearLayout dots = new LinearLayout(this);
@@ -140,14 +140,14 @@ public class OnboardingActivity extends Activity {
                     index == page ? CORAL : BORDER, 8));
             LinearLayout.LayoutParams dotLayout = new LinearLayout.LayoutParams(
                     dp(index == page ? 22 : 8), dp(8));
-            if (index > 0) dotLayout.leftMargin = dp(7);
+            if (index > 0) dotLayout.setMarginStart(dp(7));
             dots.addView(dot, dotLayout);
         }
 
         LinearLayout footer = new LinearLayout(this);
         footer.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(footer);
-        TextView back = label("上一步", 14, MUTED, false);
+        TextView back = label(getString(R.string.onb_back), 14, MUTED, false);
         back.setGravity(Gravity.CENTER);
         back.setVisibility(page == 0 ? View.INVISIBLE : View.VISIBLE);
         footer.addView(back, new LinearLayout.LayoutParams(dp(72), dp(50)));
@@ -156,7 +156,7 @@ public class OnboardingActivity extends Activity {
             showPage();
         });
         Button next = new Button(this);
-        next.setText(page == 2 ? "开始使用" : "下一步");
+        next.setText(page == 2 ? R.string.onb_start : R.string.onb_next);
         next.setTextColor(Color.WHITE);
         next.setTextSize(15);
         next.setAllCaps(false);
@@ -164,7 +164,7 @@ public class OnboardingActivity extends Activity {
         next.setBackground(round(CORAL, CORAL, 14));
         next.setElevation(0);
         LinearLayout.LayoutParams nextLayout = new LinearLayout.LayoutParams(0, dp(50), 1);
-        nextLayout.leftMargin = dp(10);
+        nextLayout.setMarginStart(dp(10));
         footer.addView(next, nextLayout);
         next.setOnClickListener(view -> {
             if (page == 2) finishGuide();
@@ -197,8 +197,12 @@ public class OnboardingActivity extends Activity {
         body.setGravity(Gravity.TOP);
         body.setPadding(0, dp(17), 0, dp(17));
         panel.addView(body);
-        body.addView(label(heading, 15, INK, true),
-                new LinearLayout.LayoutParams(dp(82), -2));
+        TextView headingView = label(heading, 15, INK, true);
+        headingView.setMaxWidth(dp(132));
+        headingView.setMaxLines(3);
+        LinearLayout.LayoutParams headingLayout = new LinearLayout.LayoutParams(-2, -2);
+        headingLayout.setMarginEnd(dp(10));
+        body.addView(headingView, headingLayout);
         TextView text = label(detail, 14, MUTED, false);
         text.setLineSpacing(dp(3), 1);
         body.addView(text, new LinearLayout.LayoutParams(0, -2, 1));

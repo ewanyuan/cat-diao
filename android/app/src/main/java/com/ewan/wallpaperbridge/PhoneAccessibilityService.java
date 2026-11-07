@@ -46,6 +46,10 @@ public class PhoneAccessibilityService extends AccessibilityService {
         return false;
     }
 
+    @Override protected void attachBaseContext(Context base) {
+        super.attachBaseContext(AppLocale.wrap(base));
+    }
+
     @Override protected void onServiceConnected() { super.onServiceConnected(); instance = this; }
     private static volatile String foregroundPackage = "";
     private static volatile long lastUserEventAt = 0;

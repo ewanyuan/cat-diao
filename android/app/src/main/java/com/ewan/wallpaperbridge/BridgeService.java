@@ -40,6 +40,10 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import java.util.ArrayList;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -82,6 +86,9 @@ public class BridgeService extends Service {
     private SharedPreferences preferences;
     private WindowManager overlayManager;
     private View overlayView;
+    private View closeChip;
+    private final ArrayList<View> overlayWindows = new ArrayList<>();
+    private Context localized;
     private final Object captureWake = new Object();
     private Thread captureWorker;
     private volatile ComputerConnection computerConnection;
@@ -206,16 +213,26 @@ public class BridgeService extends Service {
 
     public static void setOverlay(Context context, boolean enabled) {
         context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                .putBoolean("overlay_wanted", enabled).apply();
+                .putBoolean("overlay_wanted", enabled).commit();
         BridgeService service = active;
-        if (service != null) {
+        if (service != null) service.overlayHandler.post(() -> {
             service.updateOverlay();
             service.showNotification(service.lastNotificationText);
-        }
+        });
+    }
+
+    /** Persist the wish without implying the bridge or accessibility should stop. */
+    public static void setOverlayWanted(Context context, boolean enabled) {
+        setOverlay(context, enabled);
+    }
+
+    public static void refreshLocale() {
+        BridgeService service = active;
+        if (service != null) service.overlayHandler.post(service::refreshLocaleBody);
     }
 
     public static void setupFinished() {
-        if (active != null) active.showNotification("小窝连接已设好");
+        if (active != null) active.showNotification(active.s(R.string.notif_ready));
     }
 
     public static void requestCaptureSync() {
@@ -238,7 +255,7 @@ public class BridgeService extends Service {
         if (!decided) return false;
         BridgeService service = active;
         if (service != null) {
-            service.showNotification(allow ? "正在连接小窝" : "已拒绝小窝连接");
+            service.showNotification(allow ? service.s(R.string.notif_connecting) : service.s(R.string.notif_rejected));
             if (allow) service.startConnectionChecks();
         }
         return true;
@@ -257,7 +274,7 @@ public class BridgeService extends Service {
             if (attempt != null) attempt.cancel();
             LocalBridgeServer server = service.localServer;
             if (server != null) server.closeClients();
-            service.showNotification("小窝未连接；收藏会先保存在手机");
+            service.showNotification(service.s(R.string.notif_unpaired));
         }
     }
 
@@ -298,19 +315,25 @@ public class BridgeService extends Service {
         cpuLock = null; wifiLock = null;
     }
 
+    @Override protected void attachBaseContext(Context base) {
+        super.attachBaseContext(AppLocale.wrap(base));
+    }
+
+    @Override public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        refreshLocaleBody();
+    }
+
     @Override public void onCreate() {
         super.onCreate();
         active = this;
         preferences = getSharedPreferences("bridge", MODE_PRIVATE);
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        manager.createNotificationChannel(new NotificationChannel(CHANNEL, "猫叼与小窝", NotificationManager.IMPORTANCE_LOW));
-        startForeground(47, notification(preferences.getString("computer_token", "").isEmpty()
-                ? "小窝未连接；收藏会先保存在手机"
-                : setupComplete() ? "小窝连接已设好" : "小窝连接设置待完成"));
+        ensureChannel();
+        startForeground(47, notification(currentStatus()));
         acquireLocks();
         preferences.edit().remove("keep_awake").apply();
         localServer = new LocalBridgeServer(PORT, 8769, this::handleClient, error -> {
-            if (!destroyed && active == this) showNotification("连接未开启，请重新打开应用");
+            if (!destroyed && active == this) showNotification(s(R.string.notif_server_down));
         });
         startServer();
         advertise();
@@ -402,42 +425,73 @@ public class BridgeService extends Service {
 
     private View closeTarget;
     private final android.os.Handler overlayHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    /** Fade the cat only. The close chip stays readable and on screen. */
     private final Runnable tuckOverlay = () -> {
-        View view = overlayView;
-        if (view == null) return;
-        view.setAlpha(0.45f);
-        try {
-            WindowManager.LayoutParams lp = (WindowManager.LayoutParams) view.getLayoutParams();
-            int width = getResources().getDisplayMetrics().widthPixels;
-            lp.x = OverlayMath.tuckedX(lp.x, lp.width, width);
-            overlayManager.updateViewLayout(view, lp);
-        } catch (RuntimeException ignored) { }
+        View cat = overlayView == null ? null : overlayView.findViewWithTag("cat");
+        if (cat != null) cat.setAlpha(0.55f);
     };
 
     private void updateOverlay() {
-        if (!overlayEnabled(this) || visibleAppActivities > 0) { removeOverlay(); return; }
+        boolean show = OverlayPolicy.shouldShow(
+                getSharedPreferences("bridge", MODE_PRIVATE).getBoolean("overlay_wanted", false),
+                Settings.canDrawOverlays(this), visibleAppActivities);
+        if (!show) { removeOverlay(); return; }
         if (overlayView != null) return;
         try {
             overlayManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if (overlayManager == null) return;
             float density = getResources().getDisplayMetrics().density;
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            int screenHeight = getResources().getDisplayMetrics().heightPixels;
-            ImageView bubble = new ImageView(this);
-            bubble.setImageResource(getResources().getIdentifier("cat_diao_launcher", "drawable", getPackageName()));
-            bubble.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            bubble.setContentDescription("猫叼：点一下打开，长按或拖到底部关闭");
-            int size = Math.round(42 * density);
+            android.graphics.Point real = new android.graphics.Point();
+            overlayManager.getDefaultDisplay().getRealSize(real);
+            int screenWidth = Math.max(1, real.x);
+            int screenHeight = Math.max(1, real.y);
+            int width = OverlayMath.bubbleWidthPx(density);
+            int height = OverlayMath.bubbleHeightPx(density);
+            boolean left = OverlayMath.prefersLeft(preferences.getInt("overlay_x", 0), width, screenWidth);
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            // Physical placement: the chip stays on the inner side even in RTL.
+            row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+            ImageView cat = new ImageView(this);
+            cat.setTag("cat");
+            cat.setImageResource(getResources().getIdentifier("cat_diao_launcher", "drawable", getPackageName()));
+            cat.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            cat.setContentDescription(s(R.string.overlay_cd));
+            int catPx = Math.round(OverlayMath.CAT_DP * density);
+            TextView chip = new TextView(this);
+            chip.setText("✕");
+            chip.setGravity(Gravity.CENTER);
+            chip.setTextColor(0xFFFFFFFF);
+            chip.setTextSize(16);
+            chip.setContentDescription(s(R.string.overlay_chip_cd));
+            android.graphics.drawable.GradientDrawable chipBg = new android.graphics.drawable.GradientDrawable();
+            chipBg.setColor(0xCC333333);
+            chipBg.setCornerRadius(catPx);
+            chip.setBackground(chipBg);
+            int chipPx = Math.round(OverlayMath.CLOSE_CHIP_DP * density);
+            int gap = Math.round(OverlayMath.CHIP_GAP_DP * density);
+            LinearLayout.LayoutParams catLp = new LinearLayout.LayoutParams(catPx, catPx);
+            LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(chipPx, chipPx);
+            if (left) {
+                row.addView(cat, catLp);
+                chipLp.setMarginStart(gap);
+                row.addView(chip, chipLp);
+            } else {
+                chipLp.setMarginEnd(gap);
+                row.addView(chip, chipLp);
+                row.addView(cat, catLp);
+            }
+            chip.setOnClickListener(v -> closeOverlayByUser());
             WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                    size, size, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    width, height, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                     android.graphics.PixelFormat.TRANSLUCENT);
             params.gravity = Gravity.TOP | Gravity.LEFT;
-            params.x = preferences.getInt("overlay_x", 0);
-            params.y = Math.max(0, Math.min(screenHeight - size,
+            params.x = OverlayMath.bubbleX(left, screenWidth, width, density);
+            params.y = Math.max(0, Math.min(screenHeight - height,
                     preferences.getInt("overlay_y", Math.round(240 * density))));
-            params.x = OverlayMath.snapX(params.x, size, screenWidth);
-            bubble.setOnTouchListener(new View.OnTouchListener() {
+            cat.setOnTouchListener(new View.OnTouchListener() {
                 private float downX, downY;
                 private int startX, startY;
                 private boolean moved, longPressed;
@@ -451,7 +505,6 @@ public class BridgeService extends Service {
                         overlayHandler.removeCallbacks(tuckOverlay);
                         view.setAlpha(1f);
                         downX = event.getRawX(); downY = event.getRawY();
-                        params.x = OverlayMath.snapX(params.x, size, screenWidth);
                         startX = params.x; startY = params.y;
                         moved = false; longPressed = false;
                         overlayHandler.postDelayed(longPress, 700);
@@ -462,12 +515,12 @@ public class BridgeService extends Service {
                         if (!moved && (Math.abs(event.getRawX() - downX) > slop || Math.abs(event.getRawY() - downY) > slop)) {
                             moved = true;
                             overlayHandler.removeCallbacks(longPress);
-                            showCloseTarget(size);
+                            showCloseTarget();
                         }
                         if (moved) {
                             params.x = startX + Math.round(event.getRawX() - downX);
                             params.y = startY + Math.round(event.getRawY() - downY);
-                            try { overlayManager.updateViewLayout(view, params); } catch (RuntimeException ignored) { }
+                            try { overlayManager.updateViewLayout(row, params); } catch (RuntimeException ignored) { }
                             if (closeTarget != null) closeTarget.setAlpha(
                                     OverlayMath.inCloseZone(event.getRawX(), event.getRawY(), screenWidth, screenHeight, density) ? 1f : 0.6f);
                         }
@@ -481,14 +534,15 @@ public class BridgeService extends Service {
                             return true;
                         }
                         if (moved) {
-                            params.x = OverlayMath.snapX(params.x, size, screenWidth);
-                            params.y = Math.max(0, Math.min(screenHeight - size, params.y));
-                            try { overlayManager.updateViewLayout(view, params); } catch (RuntimeException ignored) { }
-                            preferences.edit().putInt("overlay_x", params.x).putInt("overlay_y", params.y).apply();
+                            boolean snapLeft = OverlayMath.prefersLeft(params.x, width, screenWidth);
+                            params.x = OverlayMath.bubbleX(snapLeft, screenWidth, width, density);
+                            params.y = Math.max(0, Math.min(screenHeight - height, params.y));
+                            try { overlayManager.updateViewLayout(row, params); } catch (RuntimeException ignored) { }
+                            preferences.edit().putInt("overlay_x", params.x).putInt("overlay_y", params.y).commit();
+                            placeChip(row, cat, chip, catLp, chipLp, snapLeft, gap);
                         } else if (event.getAction() == MotionEvent.ACTION_UP) {
-                            Intent capture = new Intent(BridgeService.this, QuickActionsActivity.class)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            startActivity(capture);
+                            startActivity(new Intent(BridgeService.this, QuickActionsActivity.class)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                         }
                         overlayHandler.postDelayed(tuckOverlay, 2500);
                         return true;
@@ -496,59 +550,97 @@ public class BridgeService extends Service {
                     return false;
                 }
             });
-            overlayManager.addView(bubble, params);
-            overlayView = bubble;
+            addOverlayWindow(row, params);
+            overlayView = row;
+            closeChip = chip;
             overlayHandler.postDelayed(tuckOverlay, 2500);
-        } catch (RuntimeException error) { overlayView = null; }
+        } catch (RuntimeException error) { removeOverlay(); }
     }
 
-    private void showCloseTarget(int size) {
+    /** Rebuild the row so the ✕ stays on the inner side after a side change. */
+    private void placeChip(LinearLayout row, ImageView cat, TextView chip,
+                           LinearLayout.LayoutParams catLp, LinearLayout.LayoutParams chipLp,
+                           boolean left, int gap) {
+        row.removeAllViews();
+        chipLp.setMarginStart(0);
+        chipLp.setMarginEnd(0);
+        if (left) {
+            row.addView(cat, catLp);
+            chipLp.setMarginStart(gap);
+            row.addView(chip, chipLp);
+        } else {
+            chipLp.setMarginEnd(gap);
+            row.addView(chip, chipLp);
+            row.addView(cat, catLp);
+        }
+    }
+
+    private void showCloseTarget() {
         if (closeTarget != null || overlayManager == null) return;
         try {
-            android.widget.TextView target = new android.widget.TextView(this);
-            target.setText("✕ 拖到这里关闭");
+            float density = getResources().getDisplayMetrics().density;
+            TextView target = new TextView(loc());
+            target.setText(s(R.string.overlay_drag));
             target.setTextColor(0xFFFFFFFF);
             target.setTextSize(14);
             target.setGravity(Gravity.CENTER);
+            target.setMaxLines(2);
             android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
             shape.setColor(0xCC333333);
-            shape.setCornerRadius(size);
+            shape.setCornerRadius(Math.round(24 * density));
             target.setBackground(shape);
-            float density = getResources().getDisplayMetrics().density;
+            int pad = Math.round(8 * density);
+            target.setPadding(pad, pad, pad, pad);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                    Math.round(170 * density), Math.round(48 * density),
+                    Math.round(OverlayMath.CLOSE_TARGET_WIDTH_DP * density),
+                    Math.round(OverlayMath.CLOSE_TARGET_HEIGHT_DP * density),
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                     android.graphics.PixelFormat.TRANSLUCENT);
             lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.y = Math.round(OverlayMath.CLOSE_BOTTOM_DP * density);
+            lp.y = Math.round(OverlayMath.CLOSE_TARGET_BOTTOM_DP * density);
             target.setAlpha(0.6f);
-            overlayManager.addView(target, lp);
+            addOverlayWindow(target, lp);
             closeTarget = target;
         } catch (RuntimeException ignored) { closeTarget = null; }
     }
 
+    private void addOverlayWindow(View view, WindowManager.LayoutParams lp) {
+        overlayManager.addView(view, lp);
+        overlayWindows.add(view);
+    }
+
     private void hideCloseTarget() {
-        if (closeTarget != null && overlayManager != null) {
-            try { overlayManager.removeView(closeTarget); } catch (RuntimeException ignored) { }
-        }
+        if (closeTarget != null) detachOverlayWindow(closeTarget);
         closeTarget = null;
     }
 
+    private void detachOverlayWindow(View view) {
+        if (overlayManager != null) {
+            try { overlayManager.removeViewImmediate(view); }
+            catch (RuntimeException ignored) {
+                try { overlayManager.removeView(view); } catch (RuntimeException ignoredToo) { }
+            }
+        }
+        overlayWindows.remove(view);
+    }
+
+    /** Turn the floating cat off. Does not stop the bridge, the computer link, or screen control. */
     private void closeOverlayByUser() {
         hideCloseTarget();
         setOverlay(this, false);
-        android.widget.Toast.makeText(this, "悬浮猫已关闭，可在猫叼「更多」里重新打开",
+        android.widget.Toast.makeText(loc(), s(R.string.overlay_off_toast),
                 android.widget.Toast.LENGTH_LONG).show();
     }
 
     private void removeOverlay() {
         overlayHandler.removeCallbacks(tuckOverlay);
-        hideCloseTarget();
-        if (overlayView != null && overlayManager != null) {
-            try { overlayManager.removeView(overlayView); } catch (RuntimeException ignored) { }
-        }
+        if (overlayManager == null) overlayManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        for (View view : new ArrayList<>(overlayWindows)) detachOverlayWindow(view);
+        overlayWindows.clear();
         overlayView = null;
+        closeTarget = null;
+        closeChip = null;
     }
 
     private void captureSyncLoop() {
@@ -557,7 +649,7 @@ public class BridgeService extends Service {
             try { more = syncCapturesOnce(); }
             catch (Exception error) {
                 String detail = error instanceof ComputerConnection.CheckFailure ? error.getMessage()
-                        : "本次收藏未送达，电脑接收程序暂未确认。";
+                        : "ce:not_confirmed";
                 preferences.edit().putString("capture_sync_error",
                         detail.length() > 180 ? detail.substring(0, 180) : detail).apply();
             }
@@ -572,7 +664,7 @@ public class BridgeService extends Service {
         String address = preferences.getString("computer_address", "");
         String token = preferences.getString("computer_token", "");
         if (address.isEmpty() || token.isEmpty()) {
-            preferences.edit().putString("capture_sync_error", "小窝未连接").apply();
+            preferences.edit().putString("capture_sync_error", "ce:not_paired").apply();
             return false;
         }
         try (CaptureStore store = new CaptureStore(this)) {
@@ -588,7 +680,7 @@ public class BridgeService extends Service {
                 if (!batch.add(items.getJSONObject(index).toString())) break;
                 sentIds.add(items.getJSONObject(index).getString("id"));
             }
-            if (batch.count() == 0) throw new IOException("这条收藏过大，暂时无法送达");
+            if (batch.count() == 0) throw new IOException("ce:too_large");
             byte[] payload = batch.payload();
             ComputerConnection.Attempt attempt = new ComputerConnection.Attempt(ComputerConnection.TIMEOUT_MS);
             captureAttempt = attempt;
@@ -597,13 +689,12 @@ public class BridgeService extends Service {
                 @Override public void run() { attempt.cancel(); }
             }, ComputerConnection.TIMEOUT_MS);
             try {
-                if (destroyed || active != this) throw new IOException("手机服务已停止");
+                if (destroyed || active != this) throw new IOException("ce:service_stopped");
                 ComputerConnection.Reply response = ComputerConnection.exchange(address, 8793, "POST", "/captures",
                         token, payload, attempt);
                 if (response.code != 200) {
                     throw new ComputerConnection.CheckFailure(response.code == 403
-                            ? "电脑没有确认当前配对，请查看「小窝连接」。"
-                            : "电脑暂未接收这批收藏，稍后会重试。");
+                            ? "ce:pair_rejected" : "ce:batch_rejected");
                 }
                 JSONObject reply = new JSONObject(new String(response.body, StandardCharsets.UTF_8));
                 JSONArray acknowledged = reply.optJSONArray("accepted");
@@ -612,8 +703,7 @@ public class BridgeService extends Service {
                     String id = acknowledged.optString(index);
                     if (sentIds.contains(id)) accepted.put(id);
                 }
-                if (accepted.length() == 0) throw new ComputerConnection.CheckFailure(
-                        "电脑尚未确认本批收藏，猫叼会保留它们并重试。");
+                if (accepted.length() == 0) throw new ComputerConnection.CheckFailure("ce:batch_unacked");
                 if (destroyed || active != this || !token.equals(preferences.getString("computer_token", ""))) return false;
                 store.acknowledge(accepted);
                 preferences.edit().remove("capture_sync_error")
@@ -628,7 +718,79 @@ public class BridgeService extends Service {
         }
     }
 
-    private String lastNotificationText = "猫叼正在运行";
+    private String lastNotificationText = "";
+
+    private void ensureChannel() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null) return;
+        manager.createNotificationChannel(new NotificationChannel(
+                CHANNEL, s(R.string.channel_name), NotificationManager.IMPORTANCE_LOW));
+    }
+
+    private void refreshLocaleBody() {
+        localized = null;
+        ensureChannel();
+        boolean wasShowing = overlayView != null;
+        removeOverlay();
+        if (wasShowing || OverlayPolicy.shouldShow(
+                preferences.getBoolean("overlay_wanted", false),
+                Settings.canDrawOverlays(this), visibleAppActivities)) updateOverlay();
+        showNotification(currentStatus());
+    }
+
+    private Context loc() {
+        if (localized == null) localized = AppLocale.wrap(this);
+        return localized;
+    }
+
+    private String s(int id) { return loc().getString(id); }
+
+    private String s(int id, Object... args) { return loc().getString(id, args); }
+
+    private String currentStatus() {
+        if (preferences.getString("computer_token", "").isEmpty()) return s(R.string.notif_unpaired);
+        if (preferences.getBoolean("remote_paused", false)) return s(R.string.notif_paused);
+        return setupComplete() ? s(R.string.notif_ready) : s(R.string.notif_setup_pending);
+    }
+
+    private String explain(Exception error) {
+        String message = error.getMessage();
+        if (message != null && message.startsWith("ce:")) return humanError(message);
+        if (message != null && !message.isEmpty()) return message;
+        return s(R.string.err_failed, error.getClass().getSimpleName());
+    }
+
+    /** Turn stored connection codes into the active language. Unknown text is left as-is. */
+    private String humanError(String code) {
+        if (code == null || code.isEmpty()) return "";
+        if (code.startsWith("ce:http:")) return s(R.string.ce_http, code.substring("ce:http:".length()));
+        switch (code) {
+            case "ce:timeout": return s(R.string.ce_timeout);
+            case "ce:no_response": return s(R.string.ce_no_response);
+            case "ce:no_address": return s(R.string.ce_no_address);
+            case "ce:receiver_outdated": return s(R.string.ce_receiver_outdated);
+            case "ce:pair_rejected": return s(R.string.ce_pair_rejected);
+            case "ce:bad_address": return s(R.string.ce_bad_address);
+            case "ce:not_lan": return s(R.string.ce_not_lan);
+            case "ce:bad_confirm": return s(R.string.ce_bad_confirm);
+            case "ce:incomplete": return s(R.string.ce_incomplete);
+            case "ce:confirm_size": return s(R.string.ce_confirm_size);
+            case "ce:truncated": return s(R.string.ce_truncated);
+            case "ce:bad_pair": return s(R.string.ce_bad_pair);
+            case "ce:confirm_long": return s(R.string.ce_confirm_long);
+            case "ce:ended": return s(R.string.ce_ended);
+            case "ce:header_timeout": return s(R.string.ce_header_timeout);
+            case "ce:header_cut": return s(R.string.ce_header_cut);
+            case "ce:header_long": return s(R.string.ce_header_long);
+            case "ce:not_paired": return s(R.string.ce_not_paired);
+            case "ce:not_confirmed": return s(R.string.ce_not_confirmed);
+            case "ce:too_large": return s(R.string.ce_too_large);
+            case "ce:service_stopped": return s(R.string.ce_service_stopped);
+            case "ce:batch_rejected": return s(R.string.ce_batch_rejected);
+            case "ce:batch_unacked": return s(R.string.ce_batch_unacked);
+            default: return code;
+        }
+    }
 
     private Notification notification(String message) {
         Intent intent = new Intent(this, MainActivity.class);
@@ -638,16 +800,16 @@ public class BridgeService extends Service {
         Intent toggle = new Intent(this, RemotePauseReceiver.class);
         PendingIntent pause = PendingIntent.getBroadcast(this, 49, toggle,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        String actionLabel = paused ? PermissionGuide.RESUME_REMOTE : PermissionGuide.PAUSE_REMOTE;
+        String actionLabel = paused ? s(R.string.resume_remote) : s(R.string.pause_remote);
         lastNotificationText = message;
         Notification.Builder builder = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(getResources().getIdentifier("cat_paw_notification", "drawable", getPackageName()))
-                .setContentTitle("猫叼").setContentText(message)
+                .setContentTitle(s(R.string.app_name)).setContentText(message)
                 .setContentIntent(open)
                 .addAction(new Notification.Action.Builder(null, actionLabel, pause).build());
         if (overlayEnabled(this)) {
             Intent hide = new Intent(this, RemotePauseReceiver.class).setAction(RemotePauseReceiver.HIDE_OVERLAY);
-            builder.addAction(new Notification.Action.Builder(null, "关闭悬浮猫",
+            builder.addAction(new Notification.Action.Builder(null, s(R.string.notif_hide_cat),
                     PendingIntent.getBroadcast(this, 51, hide,
                             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build());
         }
@@ -659,7 +821,8 @@ public class BridgeService extends Service {
         boolean paused = !prefs.getBoolean("remote_paused", false);
         prefs.edit().putBoolean("remote_paused", paused).apply();
         BridgeService service = active;
-        if (service != null) service.showNotification(paused ? "遥控已暂停，收藏仍会送达" : "遥控已恢复");
+        if (service != null) service.showNotification(paused
+                ? service.s(R.string.notif_paused) : service.s(R.string.notif_resumed));
     }
 
     private void showNotification(String message) {
@@ -704,7 +867,7 @@ public class BridgeService extends Service {
         LocalBridgeServer server = localServer;
         if (destroyed || active != this || server == null) return;
         try { server.start(); }
-        catch (IOException error) { showNotification("连接未开启，请重新打开应用"); }
+        catch (IOException error) { showNotification(s(R.string.notif_server_down)); }
     }
 
     private boolean isLocal(InetAddress address) {
@@ -714,14 +877,13 @@ public class BridgeService extends Service {
     private void handleClient(LocalBridgeServer.Client session) throws Exception {
         Socket client = session.socket;
         if (!isLocal(client.getInetAddress())) {
-            respond(client.getOutputStream(), 403, "仅允许局域网", "text/plain", null);
+            respond(client.getOutputStream(), 403, s(R.string.err_lan_only), "text/plain", null);
             return;
         }
         try { handle(session); }
         catch (Exception error) {
             try {
-                json(client.getOutputStream(), 500, new JSONObject().put("error", "手机处理请求失败：" +
-                        (error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage())));
+                json(client.getOutputStream(), 500, new JSONObject().put("error", explain(error)));
             } catch (Exception ignored) { }
         } finally {
             claimedBody.remove();
@@ -737,7 +899,7 @@ public class BridgeService extends Service {
         OutputStream output = client.getOutputStream();
         String[] lines = session.readHeaders().split("\r\n");
         String[] request = lines[0].split(" ");
-        if (request.length < 2) { respond(output, 400, "请求无效", "text/plain", null); return; }
+        if (request.length < 2) { respond(output, 400, s(R.string.err_bad_request), "text/plain", null); return; }
         String method = request[0], path = request[1];
         Map<String, String> headers = new HashMap<>();
         for (int i = 1; i < lines.length; i++) {
@@ -748,9 +910,9 @@ public class BridgeService extends Service {
         long length = 0;
         if (headers.containsKey("content-length")) {
             try { length = Long.parseLong(headers.get("content-length")); }
-            catch (NumberFormatException error) { respond(output, 400, "长度无效", "text/plain", null); return; }
+            catch (NumberFormatException error) { respond(output, 400, s(R.string.err_bad_length), "text/plain", null); return; }
         }
-        if (length < 0) { respond(output, 400, "长度无效", "text/plain", null); return; }
+        if (length < 0) { respond(output, 400, s(R.string.err_bad_length), "text/plain", null); return; }
         // Small JSON bodies have a total deadline; file uploads retain their progress timeout.
         if (length > 0 && !request[1].equals("/file") && !request[1].equals("/wallpaper/home"))
             session.watchBody(20000);
@@ -769,19 +931,19 @@ public class BridgeService extends Service {
             json(output, 200, result); return;
         }
         if (method.equals("POST") && path.equals("/pair")) {
-            if (length > 8192) { json(output, 413, new JSONObject().put("error", "连接请求过长")); return; }
+            if (length > 8192) { json(output, 413, new JSONObject().put("error", s(R.string.err_pair_too_long))); return; }
             JSONObject body = readJson(input, (int) length);
             session.bodyReceived();
-            String name = body.optString("name", "小窝").trim();
+            String name = body.optString("name", s(R.string.conn_this_computer)).trim();
             String peerPublic = body.optString("public_key", "").trim().toLowerCase(Locale.ROOT);
             if (name.length() < 1 || name.length() > 60 || !PairingExchange.validPublic(peerPublic)) {
-                json(output, 400, new JSONObject().put("error", "连接请求无效")); return;
+                json(output, 400, new JSONObject().put("error", s(R.string.err_pair_invalid))); return;
             }
             if (body.has("token")) {
-                json(output, 400, new JSONObject().put("error", "请使用 2.0 配对，不要发送令牌")); return;
+                json(output, 400, new JSONObject().put("error", s(R.string.err_pair_legacy))); return;
             }
             if (!preferences.getString("computer_token", "").isEmpty()) {
-                json(output, 409, new JSONObject().put("error", "已有小窝连接；如需更换，请在猫叼的「小窝连接」中移除")); return;
+                json(output, 409, new JSONObject().put("error", s(R.string.err_already_paired))); return;
             }
             String remoteAddress = client.getInetAddress().getHostAddress();
             PairingGate.Request existing = pairing.pending();
@@ -795,17 +957,17 @@ public class BridgeService extends Service {
             byte[] shared;
             try { shared = PairingExchange.sharedSecret(local.privateHex, peerPublic); }
             catch (IllegalArgumentException error) {
-                json(output, 400, new JSONObject().put("error", "连接请求无效")); return;
+                json(output, 400, new JSONObject().put("error", s(R.string.err_pair_invalid))); return;
             }
             String token = PairingExchange.token(shared);
             String code = PairingExchange.confirmCode(shared);
             PairingGate.Request pair = pairing.offer(name, remoteAddress, token, code, peerPublic, local.publicHex,
                     () -> !preferences.getString("computer_token", "").isEmpty());
             if (pair == null) {
-                json(output, 409, new JSONObject().put("error", "已有小窝连接或连接请求，请先在猫叼处理"));
+                json(output, 409, new JSONObject().put("error", s(R.string.err_pair_busy)));
                 return;
             }
-            showNotification("打开猫叼核对数字并确认：" + name);
+            showNotification(s(R.string.notif_pair, name));
             json(output, 202, new JSONObject().put("id", pair.id).put("state", "pending")
                     .put("public_key", pair.phonePublic));
             return;
@@ -814,7 +976,7 @@ public class BridgeService extends Service {
             String id = path.substring("/pair-status?id=".length());
             String state = pairing.status(id);
             if (state == null) {
-                json(output, 404, new JSONObject().put("error", "请求已失效")); return;
+                json(output, 404, new JSONObject().put("error", s(R.string.err_pair_gone))); return;
             }
             json(output, 200, new JSONObject().put("state", state)); return;
         }
@@ -824,13 +986,13 @@ public class BridgeService extends Service {
                 headers.get("x-catdiao-body"), headers.get("x-catdiao-sig"),
                 System.currentTimeMillis() / 1000L, nonces);
         if (!verdict.ok) {
-            json(output, 401, new JSONObject().put("error", "请先在猫叼连接小窝")); return;
+            json(output, 401, new JSONObject().put("error", s(R.string.err_need_pair))); return;
         }
         claimedBody.set(verdict.bodyHash);
         requestNonce.set(verdict.nonce);
         requestToken.set(expected);
         if (length == 0 && !RequestAuth.bodyHash(null).equals(verdict.bodyHash)) {
-            json(output, 400, new JSONObject().put("error", "请求正文与签名不一致")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_body_mismatch))); return;
         }
         preferences.edit().putLong("computer_last_seen_at", System.currentTimeMillis()).apply();
         String currentComputerAddress = client.getInetAddress().getHostAddress();
@@ -841,7 +1003,7 @@ public class BridgeService extends Service {
             if (check != null) check.request(false);
         }
         if (RoutePolicy.pausesWithRemote(method, path) && preferences.getBoolean("remote_paused", false)) {
-            json(output, 423, new JSONObject().put("error", "遥控已暂停。在猫叼通知里点「恢复遥控」。")); return;
+            json(output, 423, new JSONObject().put("error", s(R.string.err_paused))); return;
         }
         if (method.equals("GET") && path.equals("/heartbeat")) {
             requestCaptureSync();
@@ -854,19 +1016,19 @@ public class BridgeService extends Service {
         if (method.equals("GET") && path.equals("/shared-file")) { sharedFile(output); return; }
         if (method.equals("POST") && path.equals("/clipboard")) {
             if (length > 262144) {
-                json(output, 413, new JSONObject().put("error", "文字不能超过 256 KB")); return;
+                json(output, 413, new JSONObject().put("error", s(R.string.err_text_too_big))); return;
             }
             JSONObject body = readJson(input, (int) length);
             session.bodyReceived();
             if (!expected.equals(preferences.getString("computer_token", ""))) {
-                json(output, 401, new JSONObject().put("error", "这台小窝的连接已移除")); return;
+                json(output, 401, new JSONObject().put("error", s(R.string.err_pair_removed))); return;
             }
             Object value = body.opt("text");
             if (!(value instanceof String) || ((String) value).isEmpty()) {
-                json(output, 400, new JSONObject().put("error", "请提供要复制的文字")); return;
+                json(output, 400, new JSONObject().put("error", s(R.string.err_need_text))); return;
             }
             ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(
-                    ClipData.newPlainText("来自小窝", (String) value));
+                    ClipData.newPlainText(s(R.string.err_clip_label), (String) value));
             json(output, 200, new JSONObject().put("copied", true)
                     .put("characters", ((String) value).length())); return;
         }
@@ -876,17 +1038,17 @@ public class BridgeService extends Service {
         }
         if (method.equals("POST") && path.equals("/wallpaper/home")) {
             if (length > MAX_WALLPAPER) {
-                json(output, 413, new JSONObject().put("error", "壁纸图片不能超过 20 MB")); return;
+                json(output, 413, new JSONObject().put("error", s(R.string.err_wallpaper_too_big))); return;
             }
             setHomeWallpaper(input, output, (int) length); return;
         }
         if (!method.equals("POST") || length > 8192) {
-            json(output, 404, new JSONObject().put("error", "没有这个操作")); return;
+            json(output, 404, new JSONObject().put("error", s(R.string.err_unknown_action))); return;
         }
         JSONObject body = readJson(input, (int) length);
         session.bodyReceived();
         if (!expected.equals(preferences.getString("computer_token", ""))) {
-            json(output, 401, new JSONObject().put("error", "这台小窝的连接已移除")); return;
+            json(output, 401, new JSONObject().put("error", s(R.string.err_pair_removed))); return;
         }
         if (path.equals("/volume")) { setVolume(output, body); return; }
         if (path.equals("/brightness")) { setBrightness(output, body); return; }
@@ -894,7 +1056,7 @@ public class BridgeService extends Service {
         if (path.equals("/open-url")) { openUrl(output, body); return; }
         if (path.equals("/install")) { installReceived(output); return; }
         if (path.equals("/action")) { action(output, body); return; }
-        json(output, 404, new JSONObject().put("error", "没有这个操作"));
+        json(output, 404, new JSONObject().put("error", s(R.string.err_unknown_action)));
     }
 
     private boolean constantTimeEquals(String a, String b) {
@@ -914,7 +1076,7 @@ public class BridgeService extends Service {
         readFully(input, bytes);
         String claimed = claimedBody.get();
         if (claimed != null && !claimed.isEmpty() && !RequestAuth.bodyHash(bytes).equals(claimed))
-            throw new IOException("正文与签名不一致");
+            throw new IOException(s(R.string.err_body_mismatch));
         return new JSONObject(new String(bytes, StandardCharsets.UTF_8));
     }
 
@@ -922,27 +1084,27 @@ public class BridgeService extends Service {
         int offset = 0;
         while (offset < bytes.length) {
             int count = input.read(bytes, offset, bytes.length - offset);
-            if (count < 0) throw new IOException("连接中断");
+            if (count < 0) throw new IOException(s(R.string.err_transfer_cut));
             offset += count;
         }
     }
 
     private void setHomeWallpaper(InputStream input, OutputStream output, int length) throws Exception {
         if (length <= 0 || length > MAX_WALLPAPER) {
-            json(output, 413, new JSONObject().put("error", "壁纸图片不能超过 20 MB")); return;
+            json(output, 413, new JSONObject().put("error", s(R.string.err_wallpaper_too_big))); return;
         }
         byte[] data = new byte[length];
         readFully(input, data);
         String claimed = claimedBody.get();
         if (claimed != null && !claimed.isEmpty() && !RequestAuth.bodyHash(data).equals(claimed)) {
-            json(output, 400, new JSONObject().put("error", "图片与签名不一致")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_wallpaper_mismatch))); return;
         }
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(data, 0, data.length, bounds);
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0 ||
                 bounds.outWidth > 16000 || bounds.outHeight > 16000) {
-            json(output, 415, new JSONObject().put("error", "图片格式或尺寸不支持")); return;
+            json(output, 415, new JSONObject().put("error", s(R.string.err_wallpaper_format))); return;
         }
         Point size = new Point();
         ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRealSize(size);
@@ -953,7 +1115,7 @@ public class BridgeService extends Service {
         options.inSampleSize = sample;
         Bitmap decoded = BitmapFactory.decodeByteArray(data, 0, data.length, options);
         if (decoded == null) {
-            json(output, 415, new JSONObject().put("error", "无法解码图片")); return;
+            json(output, 415, new JSONObject().put("error", s(R.string.err_wallpaper_decode))); return;
         }
         Bitmap scaled = null;
         Bitmap cropped = null;
@@ -963,7 +1125,7 @@ public class BridgeService extends Service {
             int width = Math.max(size.x, Math.round(decoded.getWidth() * scale));
             int height = Math.max(size.y, Math.round(decoded.getHeight() * scale));
             if ((long) width * height > 40_000_000L) {
-                json(output, 413, new JSONObject().put("error", "图片比例过于极端")); return;
+                json(output, 413, new JSONObject().put("error", s(R.string.err_wallpaper_ratio))); return;
             }
             scaled = Bitmap.createScaledBitmap(decoded, width, height, true);
             cropped = Bitmap.createBitmap(scaled, (width - size.x) / 2,
@@ -975,7 +1137,7 @@ public class BridgeService extends Service {
             int after = manager.getWallpaperId(WallpaperManager.FLAG_SYSTEM);
             int lockAfter = manager.getWallpaperId(WallpaperManager.FLAG_LOCK);
             if (applied <= 0 || after != applied || after == before) {
-                json(output, 500, new JSONObject().put("error", "手机未确认桌面壁纸已更新")); return;
+                json(output, 500, new JSONObject().put("error", s(R.string.err_wallpaper_unconfirmed))); return;
             }
             json(output, 200, new JSONObject().put("before", before).put("after", after)
                     .put("lock_unchanged", lockBefore == lockAfter));
@@ -1020,7 +1182,7 @@ public class BridgeService extends Service {
                 .put("overlay_allowed", Settings.canDrawOverlays(this))
                 .put("setup_complete", setupComplete())
                 .put("capture_pending_count", capturePending)
-                .put("capture_sync_error", preferences.getString("capture_sync_error", ""))
+                .put("capture_sync_error", humanError(preferences.getString("capture_sync_error", "")))
                 .put("capture_sync_last_attempt_at", preferences.getLong("capture_sync_last_attempt_at", 0))
                 .put("capture_sync_last_success_at", preferences.getLong("capture_sync_last_success_at", 0))
                 .put("computer_last_seen_at", preferences.getLong("computer_last_seen_at", 0))
@@ -1028,7 +1190,7 @@ public class BridgeService extends Service {
                 .put("computer_connection_state", check.phase.name().toLowerCase(Locale.ROOT))
                 .put("computer_check_started_at", check.startedAt)
                 .put("computer_check_finished_at", check.finishedAt)
-                .put("computer_check_error", check.error)
+                .put("computer_check_error", humanError(check.error))
                 .put("computer_retry_in_progress", check.attemptRunning)
                 .put("computer_retry_started_at", check.attemptStartedAt)
                 .put("computer_retry_remaining_ms", check.remainingMs())
@@ -1093,7 +1255,7 @@ public class BridgeService extends Service {
         int stream = channel.equals("ring") ? AudioManager.STREAM_RING : AudioManager.STREAM_MUSIC;
         int level = body.optInt("level", -1);
         if (level < 0 || level > audio.getStreamMaxVolume(stream)) {
-            json(output, 400, new JSONObject().put("error", "音量范围无效")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_bad_volume))); return;
         }
         audio.setStreamVolume(stream, level, 0);
         json(output, 200, new JSONObject().put("channel", channel)
@@ -1102,11 +1264,11 @@ public class BridgeService extends Service {
 
     private void setBrightness(OutputStream output, JSONObject body) throws Exception {
         if (!Settings.System.canWrite(this)) {
-            json(output, 403, new JSONObject().put("error", "请在手机应用中允许修改系统设置")); return;
+            json(output, 403, new JSONObject().put("error", s(R.string.err_write_settings))); return;
         }
         int level = body.optInt("level", -1);
         if (level < 1 || level > 255) {
-            json(output, 400, new JSONObject().put("error", "亮度须在 1 到 255 之间")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_brightness))); return;
         }
         Settings.System.putInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE,
                 Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
@@ -1117,10 +1279,10 @@ public class BridgeService extends Service {
     private void openApp(OutputStream output, JSONObject body) throws Exception {
         String packageName = body.optString("package", "");
         if (!packageName.matches("[a-zA-Z][a-zA-Z0-9_.]{1,199}")) {
-            json(output, 400, new JSONObject().put("error", "应用名称无效")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_bad_package))); return;
         }
         Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
-        if (launch == null) { json(output, 404, new JSONObject().put("error", "找不到可打开的应用")); return; }
+        if (launch == null) { json(output, 404, new JSONObject().put("error", s(R.string.err_no_app))); return; }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
         if (accessibility != null) {
@@ -1138,8 +1300,8 @@ public class BridgeService extends Service {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             Notification note = new Notification.Builder(this, CHANNEL)
                     .setSmallIcon(getResources().getIdentifier("cat_paw_notification", "drawable", getPackageName()))
-                    .setContentTitle("小窝请求打开应用")
-                    .setContentText("点此打开 " + packageName).setContentIntent(tap).setAutoCancel(true).build();
+                    .setContentTitle(s(R.string.notif_open_app_title))
+                    .setContentText(s(R.string.notif_open_app_body, packageName)).setContentIntent(tap).setAutoCancel(true).build();
             getSystemService(NotificationManager.class).notify(48, note);
             json(output, 202, new JSONObject().put("state", "tap_phone_notification"));
         }
@@ -1148,19 +1310,19 @@ public class BridgeService extends Service {
     private void action(OutputStream output, JSONObject body) throws Exception {
         PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
         if (accessibility == null) {
-            json(output, 403, new JSONObject().put("error", "请在手机上开启「猫叼」屏幕控制")); return;
+            json(output, 403, new JSONObject().put("error", s(R.string.err_need_a11y))); return;
         }
         String type = body.optString("type", "");
         boolean accepted;
         if (type.equals("set_text")) {
             String text = body.optString("text", "");
-            if (text.length() > 10000) { json(output, 413, new JSONObject().put("error", "文字过长")); return; }
+            if (text.length() > 10000) { json(output, 413, new JSONObject().put("error", s(R.string.err_text_long))); return; }
             int code = accessibility.setText(text);
             if (code == PhoneAccessibilityService.SET_PASSWORD) {
-                json(output, 403, new JSONObject().put("error", "不会向密码框填写内容")); return;
+                json(output, 403, new JSONObject().put("error", s(R.string.err_password))); return;
             }
             if (code == PhoneAccessibilityService.SET_NO_FIELD) {
-                json(output, 409, new JSONObject().put("error", "当前没有获得焦点的输入框，请先点一下输入框")); return;
+                json(output, 409, new JSONObject().put("error", s(R.string.err_no_field))); return;
             }
             json(output, code == PhoneAccessibilityService.SET_OK ? 200 : 400,
                     new JSONObject().put("accepted", code == PhoneAccessibilityService.SET_OK).put("type", type));
@@ -1169,7 +1331,7 @@ public class BridgeService extends Service {
         if (body.optBoolean("respect_user", false)) {
             long idle = PhoneAccessibilityService.userIdleMs();
             if (idle >= 0 && idle < USER_ACTIVE_WINDOW_MS) {
-                json(output, 409, new JSONObject().put("error", "手机正在被使用，已暂缓操作")
+                json(output, 409, new JSONObject().put("error", s(R.string.err_user_active))
                         .put("user_idle_ms", idle)); return;
             }
         }
@@ -1187,7 +1349,7 @@ public class BridgeService extends Service {
     private void uiTree(OutputStream output) throws Exception {
         PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
         if (accessibility == null) {
-            json(output, 403, new JSONObject().put("error", "请在手机上开启「猫叼」屏幕控制")); return;
+            json(output, 403, new JSONObject().put("error", s(R.string.err_need_a11y))); return;
         }
         json(output, 200, new JSONObject().put("package", PhoneAccessibilityService.foregroundPackage())
                 .put("nodes", accessibility.uiTree()));
@@ -1207,7 +1369,7 @@ public class BridgeService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification note = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(getResources().getIdentifier("cat_paw_notification", "drawable", getPackageName()))
-                .setContentTitle("小窝请求打开").setContentText(label)
+                .setContentTitle(s(R.string.notif_open_title)).setContentText(label)
                 .setContentIntent(tap).setAutoCancel(true).build();
         getSystemService(NotificationManager.class).notify(49, note);
         return 202;
@@ -1221,20 +1383,20 @@ public class BridgeService extends Service {
     private void openUrl(OutputStream output, JSONObject body) throws Exception {
         String url = body.optString("url", "");
         if (!RoutePolicy.allowedUrl(url)) {
-            json(output, 400, new JSONObject().put("error", "只支持 http/https 网址")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_bad_url))); return;
         }
         Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE);
         String pkg = body.optString("package", "");
         if (!pkg.isEmpty()) {
             if (!RoutePolicy.validPackage(pkg)) {
-                json(output, 400, new JSONObject().put("error", "应用名称无效")); return;
+                json(output, 400, new JSONObject().put("error", s(R.string.err_bad_package))); return;
             }
             view.setPackage(pkg);
             if (view.resolveActivity(getPackageManager()) == null) {
-                json(output, 404, new JSONObject().put("error", "该应用无法打开这个网址")); return;
+                json(output, 404, new JSONObject().put("error", s(R.string.err_url_app))); return;
             }
         }
-        launchReply(output, view, "打开网址 " + (url.length() > 60 ? url.substring(0, 60) + "…" : url));
+        launchReply(output, view, s(R.string.err_open_url, url.length() > 60 ? url.substring(0, 60) + "…" : url));
     }
 
     /** A newer 猫叼 APK opens the system installer right away so updating is one tap. */
@@ -1255,13 +1417,13 @@ public class BridgeService extends Service {
             if (incoming.getLongVersionCode() <= current) return "not_newer";
             if (!getPackageManager().canRequestPackageInstalls()) {
                 launch(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName())), "允许猫叼安装更新");
+                        Uri.parse("package:" + getPackageName())), s(R.string.err_allow_update));
                 return "needs_install_permission";
             }
             Intent install = new Intent(Intent.ACTION_VIEW)
                     .setDataAndType(uri, "application/vnd.android.package-archive")
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            return launch(install, "安装猫叼新版本") == 200 ? "installer_opened" : "tap_phone_notification";
+            return launch(install, s(R.string.err_install_self)) == 200 ? "installer_opened" : "tap_phone_notification";
         } catch (Exception error) {
             return "check_failed";
         } finally {
@@ -1272,41 +1434,41 @@ public class BridgeService extends Service {
     private void installReceived(OutputStream output) throws Exception {
         String saved = preferences.getString("last_received_apk_uri", "");
         if (saved.isEmpty()) {
-            json(output, 404, new JSONObject().put("error", "还没有收到 APK，请先用 send 发送")); return;
+            json(output, 404, new JSONObject().put("error", s(R.string.err_no_apk))); return;
         }
         if (!getPackageManager().canRequestPackageInstalls()) {
             launch(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:" + getPackageName())), "允许猫叼安装应用");
-            json(output, 403, new JSONObject().put("error", "请在手机上允许「猫叼」安装未知应用，然后重试")
+                    Uri.parse("package:" + getPackageName())), s(R.string.err_allow_install));
+            json(output, 403, new JSONObject().put("error", s(R.string.err_install_blocked))
                     .put("state", "needs_install_permission")); return;
         }
         Intent install = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(Uri.parse(saved), "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        launchReply(output, install, "安装 " + preferences.getString("last_received_apk_name", "APK"));
+        launchReply(output, install, s(R.string.err_install_named, preferences.getString("last_received_apk_name", "APK")));
     }
 
     private void screenshot(OutputStream output) throws Exception {
         PhoneAccessibilityService accessibility = PhoneAccessibilityService.current();
         if (accessibility == null) {
-            json(output, 403, new JSONObject().put("error", "请在手机上开启「猫叼」屏幕控制")); return;
+            json(output, 403, new JSONObject().put("error", s(R.string.err_need_a11y))); return;
         }
         byte[] jpeg = Build.VERSION.SDK_INT >= 30 ? accessibility.screenshot() : null;
         if (jpeg == null) {
-            json(output, 503, new JSONObject().put("error", "截图暂不可用；锁屏或受保护的页面可能禁止截图")); return;
+            json(output, 503, new JSONObject().put("error", s(R.string.err_screenshot))); return;
         }
         respond(output, 200, null, "image/jpeg", jpeg);
     }
 
     private void receiveFile(InputStream input, OutputStream output, Map<String, String> headers, long length) throws Exception {
-        if (length <= 0) { json(output, 400, new JSONObject().put("error", "文件为空")); return; }
+        if (length <= 0) { json(output, 400, new JSONObject().put("error", s(R.string.err_empty_file))); return; }
         File storage = getExternalFilesDir(null);
         if (storage == null) {
-            json(output, 503, new JSONObject().put("error", "手机存储暂不可用")); return;
+            json(output, 503, new JSONObject().put("error", s(R.string.err_storage))); return;
         }
         long available = new StatFs(storage.getPath()).getAvailableBytes();
         if (length > available - STORAGE_RESERVE) {
-            json(output, 507, new JSONObject().put("error", "手机剩余空间不足，无法保存此文件")); return;
+            json(output, 507, new JSONObject().put("error", s(R.string.err_no_space))); return;
         }
         String encoded = headers.getOrDefault("x-filename", "file.bin");
         String name = URLDecoder.decode(encoded, "UTF-8").replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");
@@ -1318,17 +1480,17 @@ public class BridgeService extends Service {
         values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/猫叼");
         values.put(MediaStore.Downloads.IS_PENDING, 1);
         Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-        if (uri == null) { json(output, 500, new JSONObject().put("error", "手机无法创建文件")); return; }
+        if (uri == null) { json(output, 500, new JSONObject().put("error", s(R.string.err_cant_create))); return; }
         java.security.MessageDigest digest;
         try { digest = java.security.MessageDigest.getInstance("SHA-256"); }
-        catch (Exception error) { throw new IOException("无法校验文件"); }
+        catch (Exception error) { throw new IOException(s(R.string.err_cant_hash)); }
         try (OutputStream file = getContentResolver().openOutputStream(uri)) {
-            if (file == null) throw new IOException("手机无法写入文件");
+            if (file == null) throw new IOException(s(R.string.err_cant_write));
             byte[] buffer = new byte[65536];
             long remaining = length;
             while (remaining > 0) {
                 int count = input.read(buffer, 0, (int) Math.min(buffer.length, remaining));
-                if (count < 0) throw new IOException("传输中断");
+                if (count < 0) throw new IOException(s(R.string.err_transfer_cut));
                 digest.update(buffer, 0, count);
                 file.write(buffer, 0, count);
                 remaining -= count;
@@ -1341,7 +1503,7 @@ public class BridgeService extends Service {
         String actual = hex(digest.digest());
         if (claimed != null && !claimed.isEmpty() && !claimed.equals(actual)) {
             getContentResolver().delete(uri, null, null);
-            json(output, 400, new JSONObject().put("error", "文件与签名不一致")); return;
+            json(output, 400, new JSONObject().put("error", s(R.string.err_file_mismatch))); return;
         }
         values.clear(); values.put(MediaStore.Downloads.IS_PENDING, 0);
         getContentResolver().update(uri, values, null, null);
@@ -1358,7 +1520,7 @@ public class BridgeService extends Service {
 
     private void sharedFile(OutputStream output) throws Exception {
         String saved = preferences.getString("shared_uri", "");
-        if (saved.isEmpty()) { json(output, 404, new JSONObject().put("error", "请先在手机应用里选择文件")); return; }
+        if (saved.isEmpty()) { json(output, 404, new JSONObject().put("error", s(R.string.err_pick_file))); return; }
         Uri uri = Uri.parse(saved);
         String name = "phone-file";
         long size = -1;
@@ -1375,7 +1537,7 @@ public class BridgeService extends Service {
                 (size >= 0 ? "Content-Length: " + size + "\r\n" : "") +
                 "Connection: close\r\n\r\n";
         try (InputStream file = getContentResolver().openInputStream(uri)) {
-            if (file == null) throw new IOException("手机无法读取选中的文件");
+            if (file == null) throw new IOException(s(R.string.err_cant_read));
             output.write(head.getBytes(StandardCharsets.US_ASCII));
             byte[] buffer = new byte[65536];
             int count;

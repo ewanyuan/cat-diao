@@ -39,7 +39,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-public class MainActivity extends Activity {
+public class MainActivity extends CatDiaoActivity {
     private static final int CREAM = Color.rgb(250, 247, 241);
     private static final int PAPER = Color.WHITE;
     private static final int INK = Color.rgb(61, 52, 47);
@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
             startForegroundService(new Intent(this, BridgeService.class)
                     .setAction(BridgeService.ACTION_CHECK_CONNECTION));
         } catch (Exception error) {
-            Toast.makeText(this, "猫叼暂时连不上小窝，请重新打开", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_service_down, Toast.LENGTH_LONG).show();
         }
         mainHandler.post(refresh);
         mainHandler.postDelayed(this::maybeStartSetup, 650);
@@ -129,10 +129,10 @@ public class MainActivity extends Activity {
         if (now - prefs.getLong("battery_prompt_at", 0L) < 24L * 60 * 60 * 1000) return;
         prefs.edit().putLong("battery_prompt_at", now).apply();
         new AlertDialog.Builder(this)
-                .setTitle(PermissionGuide.SCREEN_OFF_TITLE)
-                .setMessage(PermissionGuide.SCREEN_OFF_BODY)
-                .setNegativeButton("稍后", null)
-                .setPositiveButton("去允许", (dialog, which) -> {
+                .setTitle(R.string.perm_screen_off_title)
+                .setMessage(R.string.perm_screen_off_body)
+                .setNegativeButton(R.string.action_later, null)
+                .setPositiveButton(R.string.conn_allow, (dialog, which) -> {
                     try {
                         startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                                 Uri.parse("package:" + getPackageName())));
@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
                             startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                     Uri.parse("package:" + getPackageName())));
                         } catch (Exception ignored) {
-                            Toast.makeText(this, "请到系统设置的电池页面，允许猫叼在后台运行", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, R.string.toast_battery_settings, Toast.LENGTH_LONG).show();
                         }
                     }
                 }).show();
@@ -156,8 +156,8 @@ public class MainActivity extends Activity {
         }
         if (overlayPermissionPending) {
             overlayPermissionPending = false;
-            Toast.makeText(this, overlayGranted ? "悬浮猫已开启" :
-                    "悬浮猫未开启，其他收藏方式仍可使用", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, overlayGranted ? R.string.toast_overlay_on :
+                    R.string.toast_overlay_kept_off, Toast.LENGTH_LONG).show();
         }
         if (setupInProgress) mainHandler.postDelayed(this::advanceSetup, 250);
     }
@@ -178,11 +178,11 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == 14) {
             if (BluetoothLink.permission(this)) openBluetoothSettings();
-            else Toast.makeText(this, "蓝牙未开启，仍可通过 Wi-Fi 连接", Toast.LENGTH_LONG).show();
+            else Toast.makeText(this, R.string.toast_bt_off, Toast.LENGTH_LONG).show();
             return;
         }
         if (requestCode == 1 && (results.length == 0 || results[0] != PackageManager.PERMISSION_GRANTED)) {
-            Toast.makeText(this, "允许局域网访问后，猫叼才能找到小窝", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_lan_needed, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -205,12 +205,12 @@ public class MainActivity extends Activity {
         header.addView(cat, new LinearLayout.LayoutParams(dp(48), dp(48)));
         LinearLayout nameBlock = new LinearLayout(this);
         nameBlock.setOrientation(LinearLayout.VERTICAL);
-        nameBlock.setPadding(dp(8), 0, 0, 0);
+        nameBlock.setPaddingRelative(dp(8), 0, 0, 0);
         header.addView(nameBlock, new LinearLayout.LayoutParams(0, -2, 1));
-        nameBlock.addView(label("猫叼", 22, INK, true));
+        nameBlock.addView(label(getString(R.string.app_name), 22, INK, true));
         TextView more = label("⋯", 26, CORAL_DARK, false);
         more.setGravity(Gravity.CENTER);
-        more.setContentDescription("更多操作");
+        more.setContentDescription(getString(R.string.menu_more));
         more.setBackground(round(PAPER, BORDER, 14));
         header.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
         more.setOnClickListener(this::showMore);
@@ -229,7 +229,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams illustrationLayout = new LinearLayout.LayoutParams(-1, dp(148));
         illustrationLayout.bottomMargin = dp(16);
         hero.addView(illustration, illustrationLayout);
-        summary = label("正在查看收藏…", 21, INK, true);
+        summary = label(getString(R.string.home_loading), 21, INK, true);
         hero.addView(summary);
         summaryDetail = label("", 14, CORAL_DARK, false);
         summaryDetail.setPadding(0, dp(4), 0, 0);
@@ -237,8 +237,8 @@ public class MainActivity extends Activity {
         computerStatus = label("", 13, MUTED, false);
         computerStatus.setPadding(0, dp(10), 0, dp(2));
         hero.addView(computerStatus);
-        Button capture = button("收藏复制内容", true);
-        LinearLayout.LayoutParams captureLayout = new LinearLayout.LayoutParams(-1, dp(50));
+        Button capture = button(getString(R.string.home_capture), true);
+        LinearLayout.LayoutParams captureLayout = new LinearLayout.LayoutParams(-1, -2);
         captureLayout.topMargin = dp(15);
         hero.addView(capture, captureLayout);
         capture.setOnClickListener(v -> startActivity(new Intent(this, CaptureActivity.class)
@@ -253,23 +253,23 @@ public class MainActivity extends Activity {
         connectionSteps = label("", 14, MUTED, false);
         connectionSteps.setPadding(0, dp(8), 0, dp(8));
         connectionPanel.addView(connectionSteps);
-        connectionRetry = button("再试一次", false);
+        connectionRetry = button(getString(R.string.home_retry), false);
         connectionPanel.addView(connectionRetry);
         connectionRetry.setOnClickListener(v -> {
             try {
                 startForegroundService(new Intent(this, BridgeService.class)
                         .setAction(BridgeService.ACTION_CHECK_CONNECTION));
             } catch (Exception error) {
-                Toast.makeText(this, "连接检查未能启动，请重新打开猫叼。", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, R.string.toast_check_failed, Toast.LENGTH_LONG).show();
             }
         });
-        connectionBluetooth = button("用蓝牙连接", false);
+        connectionBluetooth = button(getString(R.string.home_bluetooth), false);
         connectionBluetooth.setOnClickListener(v -> setupBluetooth());
         connectionPanel.addView(connectionBluetooth);
-        connectionPanel.addView(label("开始连接  ›", 13, CORAL_DARK, true));
+        connectionPanel.addView(connectLink());
         connectionPanel.setOnClickListener(v -> openConnection());
-        revokeButton = button("移除小窝连接", false);
-        LinearLayout.LayoutParams revokeLayout = new LinearLayout.LayoutParams(-1, dp(50));
+        revokeButton = button(getString(R.string.home_revoke), false);
+        LinearLayout.LayoutParams revokeLayout = new LinearLayout.LayoutParams(-1, -2);
         revokeLayout.topMargin = dp(14);
         page.addView(revokeButton, revokeLayout);
         revokeButton.setOnClickListener(v -> confirmRevoke());
@@ -279,7 +279,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams controlLayout = new LinearLayout.LayoutParams(-1, -2);
         controlLayout.topMargin = dp(14);
         page.addView(controlPanel, controlLayout);
-        controlPanel.addView(label("继续设置手机控制", 17, INK, true));
+        controlPanel.addView(label(getString(R.string.home_control_title), 17, INK, true));
         controlStatus = label("", 13, MUTED, false);
         controlStatus.setPadding(0, dp(6), 0, 0);
         controlPanel.addView(controlStatus);
@@ -289,7 +289,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams recentsLayout = new LinearLayout.LayoutParams(-1, -2);
         recentsLayout.topMargin = dp(14);
         page.addView(recentPanel, recentsLayout);
-        recentPanel.addView(label("最近收藏", 17, INK, true));
+        recentPanel.addView(label(getString(R.string.home_recent), 17, INK, true));
         recentList = new LinearLayout(this);
         recentList.setOrientation(LinearLayout.VERTICAL);
         recentPanel.addView(recentList);
@@ -303,19 +303,19 @@ public class MainActivity extends Activity {
             pending = store.pendingCount();
             recentPanel.setVisibility(total == 0 ? View.GONE : View.VISIBLE);
             if (total == 0) {
-                summary.setText("还没有收藏");
-                summaryDetail.setText("看到喜欢的内容，分享给猫叼就行。");
+                summary.setText(R.string.home_empty_title);
+                summaryDetail.setText(R.string.home_empty_body);
             } else if (pending > 0) {
-                summary.setText(pending + " 条待叼回小窝");
-                summaryDetail.setText("已保存在手机，连上小窝后自动送达。");
+                summary.setText(getResources().getQuantityString(R.plurals.home_pending, pending, pending));
+                summaryDetail.setText(R.string.home_pending_body);
             } else {
-                summary.setText("都叼回小窝了");
-                summaryDetail.setText("共收藏 " + total + " 条。");
+                summary.setText(R.string.home_all_done);
+                summaryDetail.setText(getResources().getQuantityString(R.plurals.home_total, total, total));
             }
             renderRecent(store.recent(3));
         } catch (Exception error) {
-            summary.setText("暂时读不到收藏");
-            summaryDetail.setText("请稍后重新打开猫叼。");
+            summary.setText(R.string.home_read_error);
+            summaryDetail.setText(R.string.home_read_error_body);
             recentPanel.setVisibility(View.GONE);
         }
         int ready = setupReadyCount();
@@ -326,7 +326,7 @@ public class MainActivity extends Activity {
         revokeButton.setVisibility(trusted.isEmpty() ? View.GONE : View.VISIBLE);
         connectionRetry.setVisibility(trusted.isEmpty() || online ? View.GONE : View.VISIBLE);
         connectionRetry.setEnabled(!checking);
-        connectionRetry.setText(checking ? "正在找小窝…" : "再试一次");
+        connectionRetry.setText(checking ? R.string.home_searching : R.string.home_retry);
         connectionBluetooth.setVisibility(!trusted.isEmpty() && !online ? View.VISIBLE : View.GONE);
         computerStatus.setText(computerConnectionText(trusted));
         computerStatus.setTextColor(trusted.isEmpty() ? MUTED : online ? MINT : CORAL_DARK);
@@ -334,40 +334,39 @@ public class MainActivity extends Activity {
         if (trusted.isEmpty()) {
             PairingGate.Request pendingPair = BridgeService.pendingPair();
             if (pendingPair != null) {
-                connectionTitle.setText("电脑正在请求连接");
-                connectionSteps.setText("点这里核对 6 位数字。");
+                connectionTitle.setText(R.string.home_pair_title);
+                connectionSteps.setText(R.string.home_pair_body);
             } else {
-                connectionTitle.setText("把电脑连成你的小窝");
-                connectionSteps.setText("点这里，一步一步连。电脑上运行 run.ps1 pair。");
+                connectionTitle.setText(R.string.home_setup_title);
+                connectionSteps.setText(getString(R.string.home_setup_body, FirstConnection.PC_COMMAND));
             }
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (!online) {
             if (checking) {
                 long seconds = (check.remainingMs() + 999) / 1000;
-                connectionTitle.setText("正在找小窝 · " + seconds + " 秒");
-                connectionSteps.setText("收藏已保存在手机，连上后会自动送达。");
+                connectionTitle.setText(getString(R.string.home_finding_title, seconds));
+                connectionSteps.setText(R.string.home_finding_body);
             } else {
-                connectionTitle.setText("还没找到小窝");
-                connectionSteps.setText(!BridgeService.isRunning() ? "重新打开猫叼，再试一次。收藏还在手机里。" :
-                        "确认电脑上的猫叼接收已开启。换了网络？可以用蓝牙找回连接。");
+                connectionTitle.setText(R.string.home_missing_title);
+                connectionSteps.setText(!BridgeService.isRunning()
+                        ? R.string.home_missing_stopped : R.string.home_missing_body);
             }
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (bluetoothOnly) {
-            connectionTitle.setText("已通过蓝牙连接");
-            connectionSteps.setText("收藏会自动送达。传文件或剪贴板文字时，请连同一个 Wi-Fi。");
+            connectionTitle.setText(R.string.home_bt_title);
+            connectionSteps.setText(R.string.home_bt_body);
             connectionPanel.setVisibility(View.VISIBLE);
         } else if (pending > 0) {
             String syncError = getSharedPreferences("bridge", MODE_PRIVATE).getString("capture_sync_error", "");
-            connectionTitle.setText(syncError.isEmpty() ? "正在送到小窝" : "收藏还在手机里");
-            connectionSteps.setText(syncError.isEmpty() ? "稍等一下，正在补送收藏。"
-                    : "这次还没送达，猫叼会自动再试。");
+            connectionTitle.setText(syncError.isEmpty() ? R.string.home_sending_title : R.string.home_held_title);
+            connectionSteps.setText(syncError.isEmpty() ? R.string.home_sending_body : R.string.home_held_body);
             connectionPanel.setVisibility(View.VISIBLE);
         } else {
             connectionPanel.setVisibility(View.GONE);
         }
         controlPanel.setVisibility(trusted.isEmpty() || ready == 3 ? View.GONE : View.VISIBLE);
         if (!trusted.isEmpty() && ready < 3) {
-            controlStatus.setText(PermissionGuide.SPLIT_INTRO);
+            controlStatus.setText(R.string.perm_intro);
         }
         showPairRequest();
     }
@@ -377,14 +376,13 @@ public class MainActivity extends Activity {
     }
 
     private String computerConnectionText(String trusted) {
-        if (trusted.isEmpty()) return "还未与电脑配对";
-        if (!BridgeService.isRunning()) return "手机连接服务已停止，请重新打开猫叼。";
-        if (computerOnline()) return (BridgeService.wifiOnline(this) ? "Wi-Fi 已连接 · " : "蓝牙已连接 · ") + trusted;
+        if (trusted.isEmpty()) return getString(R.string.status_unpaired);
+        if (!BridgeService.isRunning()) return getString(R.string.status_stopped);
+        if (computerOnline()) return getString(BridgeService.wifiOnline(this)
+                ? R.string.status_wifi : R.string.status_bluetooth, trusted);
         ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
-        if (check.phase == ComputerConnection.Phase.CHECKING) {
-            return "正在找小窝 · " + trusted;
-        }
-        return "小窝暂未连接 · " + trusted;
+        if (check.phase == ComputerConnection.Phase.CHECKING) return getString(R.string.status_finding, trusted);
+        return getString(R.string.status_offline, trusted);
     }
 
     private void renderRecent(JSONArray items) {
@@ -393,7 +391,7 @@ public class MainActivity extends Activity {
         recentSignature = signature;
         recentList.removeAllViews();
         if (items.length() == 0) {
-            TextView empty = label("还没有收藏。下次看到想留下的内容，直接分享到猫叼。", 14, MUTED, false);
+            TextView empty = label(getString(R.string.home_recent_empty), 14, MUTED, false);
             empty.setPadding(0, dp(15), 0, dp(5));
             recentList.addView(empty);
             return;
@@ -409,15 +407,16 @@ public class MainActivity extends Activity {
                 recentList.addView(divider, dividerLayout);
             }
             String value = item.optString("text", "").replace('\n', ' ').trim();
-            TextView title = label(value.isEmpty() ? "未命名收藏" : value, 15, INK, true);
+            TextView title = label(value.isEmpty() ? getString(R.string.home_unnamed) : value, 15, INK, true);
             title.setMaxLines(2);
             title.setEllipsize(TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams titleLayout = new LinearLayout.LayoutParams(-1, -2);
             titleLayout.topMargin = dp(10);
             recentList.addView(title, titleLayout);
             boolean pending = "pending".equals(item.optString("state"));
-            String source = item.optString("source", "分享");
-            recentList.addView(label(source + "  ·  " + (pending ? "待叼回小窝" : "已到小窝"),
+            String source = SourceLabels.display(this, item.optString("source", "分享"));
+            recentList.addView(label(getString(R.string.home_source_line, source,
+                    getString(pending ? R.string.home_state_pending : R.string.home_state_sent)),
                     12, pending ? CORAL_DARK : MINT, false));
         }
     }
@@ -438,15 +437,53 @@ public class MainActivity extends Activity {
         openConnection();
     }
 
+    private LinearLayout connectLink() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(label(getString(R.string.home_connect_link), 13, CORAL_DARK, true));
+        TextView arrow = label(getString(R.string.chevron_forward), 13, CORAL_DARK, true);
+        arrow.setPaddingRelative(dp(6), 0, 0, 0);
+        row.addView(arrow);
+        return row;
+    }
+
+    private void showLanguage() {
+        String[] tags = LocalePolicy.TAGS;
+        String[] labels = new String[tags.length + 1];
+        String[] values = new String[labels.length];
+        labels[0] = getString(R.string.language_system);
+        values[0] = LocalePolicy.SYSTEM;
+        for (int index = 0; index < tags.length; index++) {
+            labels[index + 1] = LocalePolicy.nativeName(tags[index]);
+            values[index + 1] = tags[index];
+        }
+        String current = AppLocale.choice(this);
+        int checked = 0;
+        for (int index = 0; index < values.length; index++) {
+            if (values[index].equalsIgnoreCase(current)) checked = index;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.language_title)
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    if (!values[which].equalsIgnoreCase(current)) {
+                        AppLocale.setChoice(this, values[which]);
+                        recreate();
+                    }
+                }).show();
+    }
+
     private void showMore(View anchor) {
         PopupMenu menu = new PopupMenu(this, anchor);
-        menu.getMenu().add(Menu.NONE, 1, 1, "发到小窝");
-        menu.getMenu().add(Menu.NONE, 2, 2, BridgeService.overlayEnabled(this)
-                ? "关闭悬浮猫" : "开启悬浮猫");
-        menu.getMenu().add(Menu.NONE, 3, 3, "小窝连接");
-        menu.getMenu().add(Menu.NONE, 4, 4, "使用指南");
-        menu.getMenu().add(Menu.NONE, 5, 5, "蓝牙连接");
-        menu.getMenu().add(Menu.NONE, 6, 6, "权限与省电");
+        menu.getMenu().add(Menu.NONE, 1, 1, getString(R.string.menu_send));
+        menu.getMenu().add(Menu.NONE, 2, 2, getString(BridgeService.overlayEnabled(this)
+                ? R.string.menu_overlay_off : R.string.menu_overlay_on));
+        menu.getMenu().add(Menu.NONE, 3, 3, getString(R.string.menu_connection));
+        menu.getMenu().add(Menu.NONE, 4, 4, getString(R.string.menu_guide));
+        menu.getMenu().add(Menu.NONE, 5, 5, getString(R.string.menu_bluetooth));
+        menu.getMenu().add(Menu.NONE, 6, 6, getString(R.string.menu_permissions));
+        menu.getMenu().add(Menu.NONE, 7, 7, getString(R.string.menu_language));
         menu.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showTransfer();
             else if (item.getItemId() == 2) toggleOverlay();
@@ -455,6 +492,7 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(this, OnboardingActivity.class));
             else if (item.getItemId() == 5) setupBluetooth();
             else if (item.getItemId() == 6) showPermissionGuide();
+            else if (item.getItemId() == 7) showLanguage();
             return true;
         });
         menu.show();
@@ -462,12 +500,12 @@ public class MainActivity extends Activity {
 
     private void showTransfer() {
         if (BridgeService.trustedName(this).isEmpty()) {
-            Toast.makeText(this, "请先从小窝发起连接，并在猫叼确认", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_need_pair_first, Toast.LENGTH_LONG).show();
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle("发到小窝")
-                .setItems(new String[]{"发送文件", "发送复制的文字"}, (dialog, choice) -> {
+                .setTitle(R.string.menu_send)
+                .setItems(new String[]{getString(R.string.panel_send_file), getString(R.string.panel_send_text)}, (dialog, choice) -> {
                     if (choice == 0) {
                         Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                         pick.addCategory(Intent.CATEGORY_OPENABLE);
@@ -481,7 +519,7 @@ public class MainActivity extends Activity {
 
     private void toggleOverlay() {
         if (BridgeService.overlayEnabled(this)) {
-            getSharedPreferences("bridge", MODE_PRIVATE).edit().putBoolean("overlay_wanted", false).apply();
+            getSharedPreferences("bridge", MODE_PRIVATE).edit().putBoolean("overlay_wanted", false).commit();
             BridgeService.setOverlay(this, false);
             return;
         }
@@ -489,12 +527,12 @@ public class MainActivity extends Activity {
             BridgeService.setOverlay(this, true);
         } else {
             new AlertDialog.Builder(this)
-                    .setTitle("开启悬浮猫")
-                    .setMessage("在其他应用里点悬浮猫就能收藏。不想要时长按它即可关闭。")
-                    .setNegativeButton("暂不开启", null)
-                    .setPositiveButton("去系统设置", (dialog, which) -> {
+                    .setTitle(R.string.overlay_enable_title)
+                    .setMessage(R.string.overlay_enable_body)
+                    .setNegativeButton(R.string.overlay_not_now, null)
+                    .setPositiveButton(R.string.overlay_go_settings, (dialog, which) -> {
                         getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                                .putBoolean("overlay_wanted", true).apply();
+                                .putBoolean("overlay_wanted", true).commit();
                         overlayPermissionPending = true;
                         startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                                 Uri.parse("package:" + getPackageName())));
@@ -545,7 +583,7 @@ public class MainActivity extends Activity {
         if (ready == 3) {
             setSetupInProgress(false);
             BridgeService.setupFinished();
-            Toast.makeText(this, "小窝连接已设好", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_setup_ready, Toast.LENGTH_LONG).show();
             return;
         }
         String instruction;
@@ -555,21 +593,21 @@ public class MainActivity extends Activity {
             step = 1;
             if (Build.VERSION.SDK_INT >= 33 && !getSharedPreferences("bridge", MODE_PRIVATE)
                     .getBoolean("restricted_settings_opened", false)) {
-                instruction = PermissionGuide.RESTRICTED_SETTINGS_BODY;
+                instruction = getString(R.string.perm_restricted_body);
                 settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.parse("package:" + getPackageName()));
             } else {
-                instruction = "在系统设置中开启「猫叼屏幕控制」，然后返回猫叼。收藏不需要这一步。";
+                instruction = getString(R.string.perm_setup_a11y);
                 settings = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             }
         } else if (!Settings.canDrawOverlays(this)) {
             step = 2;
-            instruction = "允许「猫叼」显示在其他应用上层，然后返回猫叼。";
+            instruction = getString(R.string.perm_setup_overlay);
             settings = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName()));
         } else {
             step = 3;
-            instruction = "允许「猫叼」修改系统设置，然后返回猫叼。";
+            instruction = getString(R.string.perm_setup_write);
             settings = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS,
                     Uri.parse("package:" + getPackageName()));
         }
@@ -578,10 +616,10 @@ public class MainActivity extends Activity {
             return;
         }
         setupDialog = new AlertDialog.Builder(this)
-                .setTitle("继续连接小窝（" + ready + "/3）")
+                .setTitle(getString(R.string.perm_setup_title, ready))
                 .setMessage(instruction)
-                .setNegativeButton("稍后", (dialog, which) -> setSetupInProgress(false))
-                .setPositiveButton("继续", (dialog, which) -> openSetupSettings(step, settings))
+                .setNegativeButton(R.string.action_later, (dialog, which) -> setSetupInProgress(false))
+                .setPositiveButton(R.string.action_continue, (dialog, which) -> openSetupSettings(step, settings))
                 .setCancelable(false).create();
         setupDialog.show();
     }
@@ -596,25 +634,25 @@ public class MainActivity extends Activity {
         }
         if (step == 2) {
             getSharedPreferences("bridge", MODE_PRIVATE).edit()
-                    .putBoolean("overlay_wanted", true).apply();
+                    .putBoolean("overlay_wanted", true).commit();
         }
         try {
-            Toast.makeText(this, step == 1 ? "请开启「猫叼屏幕控制」，然后返回猫叼" :
-                    step == 2 ? "请允许猫叼悬浮显示，然后返回猫叼" :
-                            "请允许猫叼修改系统设置，然后返回猫叼", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, step == 1 ? R.string.perm_toast_a11y :
+                    step == 2 ? R.string.perm_toast_overlay :
+                            R.string.perm_toast_write, Toast.LENGTH_LONG).show();
             startActivity(settings);
         } catch (Exception error) {
             setSetupInProgress(false);
-            Toast.makeText(this, "无法打开系统设置，请从手机设置里开启猫叼", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_settings_fail, Toast.LENGTH_LONG).show();
         }
     }
 
     private void confirmRevoke() {
         new AlertDialog.Builder(this)
-                .setTitle("移除小窝连接？")
-                .setMessage("这台电脑将不能再连接猫叼。还没送到电脑的收藏仍保存在手机。")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("移除", (dialog, which) -> {
+                .setTitle(R.string.revoke_title)
+                .setMessage(R.string.revoke_body)
+                .setNegativeButton(R.string.action_cancel, null)
+                .setPositiveButton(R.string.action_remove, (dialog, which) -> {
                     BridgeService.revoke(this);
                     refreshHome();
                 }).show();
@@ -626,53 +664,53 @@ public class MainActivity extends Activity {
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(dp(22), dp(8), dp(22), dp(8));
         scroll.addView(body);
-        body.addView(label(PermissionGuide.SPLIT_INTRO, 14, INK, false));
-        Button screen = button("开启屏幕控制", true);
+        body.addView(label(getString(R.string.perm_intro), 14, INK, false));
+        Button screen = button(getString(R.string.perm_screen), true);
         screen.setOnClickListener(v -> openScreenControl());
         body.addView(screen);
-        body.addView(label(PermissionGuide.RESTRICTED_SETTINGS_BODY, 13, MUTED, false));
-        Button overlay = button("悬浮窗（可选）", false);
+        body.addView(label(getString(R.string.perm_restricted_body), 13, MUTED, false));
+        Button overlay = button(getString(R.string.perm_overlay), false);
         overlay.setOnClickListener(v -> {
-            getSharedPreferences("bridge", MODE_PRIVATE).edit().putBoolean("overlay_wanted", true).apply();
+            getSharedPreferences("bridge", MODE_PRIVATE).edit().putBoolean("overlay_wanted", true).commit();
             startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName())));
         });
         body.addView(overlay);
-        Button brightness = button("允许调节亮度", false);
+        Button brightness = button(getString(R.string.perm_brightness), false);
         brightness.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS,
                 Uri.parse("package:" + getPackageName()))));
         body.addView(brightness);
-        body.addView(label(PermissionGuide.BATTERY_BODY, 13, MUTED, false));
-        Button battery = button("加入电池优化白名单", false);
+        body.addView(label(getString(R.string.perm_battery), 13, MUTED, false));
+        Button battery = button(getString(R.string.perm_battery_button), false);
         battery.setOnClickListener(v -> {
             try {
                 startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                         Uri.parse("package:" + getPackageName())));
             } catch (Exception error) {
-                Toast.makeText(this, "请到系统设置的电池页面，允许猫叼在后台运行", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, R.string.toast_battery_settings, Toast.LENGTH_LONG).show();
             }
         });
         body.addView(battery);
-        body.addView(label(PermissionGuide.AUTOSTART_BODY, 13, MUTED, false));
-        new AlertDialog.Builder(this).setTitle("权限与省电").setView(scroll)
-                .setPositiveButton("完成", null).show();
+        body.addView(label(getString(R.string.perm_autostart), 13, MUTED, false));
+        new AlertDialog.Builder(this).setTitle(R.string.perm_title).setView(scroll)
+                .setPositiveButton(R.string.action_done, null).show();
     }
 
     private void openScreenControl() {
         if (Build.VERSION.SDK_INT >= 33 && !getSharedPreferences("bridge", MODE_PRIVATE)
                 .getBoolean("restricted_settings_opened", false)) {
             new AlertDialog.Builder(this)
-                    .setTitle(PermissionGuide.RESTRICTED_SETTINGS_TITLE)
-                    .setMessage(PermissionGuide.RESTRICTED_SETTINGS_BODY)
-                    .setNegativeButton("稍后", null)
-                    .setPositiveButton("打开应用信息", (dialog, which) -> {
+                    .setTitle(R.string.perm_restricted_title)
+                    .setMessage(R.string.perm_restricted_body)
+                    .setNegativeButton(R.string.action_later, null)
+                    .setPositiveButton(R.string.perm_open_app_info, (dialog, which) -> {
                         getSharedPreferences("bridge", MODE_PRIVATE).edit()
                                 .putBoolean("restricted_settings_opened", true).apply();
                         try {
                             startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                     Uri.parse("package:" + getPackageName())));
                         } catch (Exception error) {
-                            Toast.makeText(this, "请到系统设置里打开猫叼的应用信息", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, R.string.toast_app_info_fail, Toast.LENGTH_LONG).show();
                         }
                     }).show();
             return;
@@ -680,7 +718,7 @@ public class MainActivity extends Activity {
         try {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         } catch (Exception error) {
-            Toast.makeText(this, "请到系统设置的无障碍里开启「猫叼屏幕控制」", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_a11y_fail, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -689,10 +727,10 @@ public class MainActivity extends Activity {
             openConnection();
             return;
         }
-        new AlertDialog.Builder(this).setTitle("用蓝牙找回小窝")
-                .setMessage("在系统设置里把手机和电脑的蓝牙配对一次。之后换了网络，猫叼会用蓝牙送收藏。")
-                .setNegativeButton("稍后", null)
-                .setPositiveButton("去设置", (dialog, which) -> {
+        new AlertDialog.Builder(this).setTitle(R.string.bt_title)
+                .setMessage(R.string.bt_body)
+                .setNegativeButton(R.string.action_later, null)
+                .setPositiveButton(R.string.bt_go, (dialog, which) -> {
                     if (!BluetoothLink.permission(this)) requestPermissions(
                             new String[]{android.Manifest.permission.BLUETOOTH_CONNECT}, 14);
                     else openBluetoothSettings();
@@ -704,7 +742,7 @@ public class MainActivity extends Activity {
             startForegroundService(new Intent(this, BridgeService.class));
             startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
         } catch (Exception error) {
-            Toast.makeText(this, "请在手机设置中打开蓝牙", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_bt_settings_fail, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -713,42 +751,41 @@ public class MainActivity extends Activity {
         if (requestCode != 29 || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         try {
-            getContentResolver().takePersistableUriPermission(uri,
-                    data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             BridgeService.shareFile(this, uri);
             sendSelectedFileToComputer(this);
         } catch (Exception error) {
-            Toast.makeText(this, "这个文件打不开，请换一个再试", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_file_unopenable, Toast.LENGTH_LONG).show();
         }
     }
 
     static void sendClipboardToComputer(Activity activity) {
         if (BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(activity)) {
-            Toast.makeText(activity, "发送到电脑剪贴板需要 Wi-Fi；也可以先收藏这段文字", Toast.LENGTH_LONG).show();
+            Toast.makeText(activity, R.string.toast_clipboard_needs_wifi, Toast.LENGTH_LONG).show();
             return;
         }
         String address = activity.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_address", "");
         String token = activity.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_token", "");
         if (address.isEmpty() || token.isEmpty()) {
-            Toast.makeText(activity, "请先连接小窝", Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, R.string.toast_connect_first, Toast.LENGTH_SHORT).show();
             return;
         }
         ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
         ClipData clip = clipboard == null ? null : clipboard.getPrimaryClip();
         if (clip == null || clip.getItemCount() == 0) {
-            Toast.makeText(activity, "请先在手机上复制一段文字", Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, R.string.toast_copy_first, Toast.LENGTH_SHORT).show();
             return;
         }
         CharSequence content = clip.getItemAt(0).coerceToText(activity);
         String value = content == null ? "" : content.toString();
         if (value.isEmpty()) {
-            Toast.makeText(activity, "手机剪贴板里没有文字", Toast.LENGTH_SHORT).show();
+            Toast.makeText(activity, R.string.toast_clipboard_empty, Toast.LENGTH_SHORT).show();
             return;
         }
         byte[] payload = ("{\"text\":" + JSONObject.quote(value) + "}")
                 .getBytes(StandardCharsets.UTF_8);
         if (payload.length > 262144) {
-            Toast.makeText(activity, "文字超过 256 KB，请改用文件传输", Toast.LENGTH_LONG).show();
+            Toast.makeText(activity, R.string.toast_text_too_big, Toast.LENGTH_LONG).show();
             return;
         }
         new Thread(() -> {
@@ -775,25 +812,25 @@ public class MainActivity extends Activity {
                 if (connection != null) connection.disconnect();
             }
             boolean delivered = sent;
-            activity.runOnUiThread(() -> Toast.makeText(activity, delivered ? "已放入小窝剪贴板" :
-                    "小窝暂时没收到，稍后再试", Toast.LENGTH_LONG).show());
+            activity.runOnUiThread(() -> Toast.makeText(activity, delivered ? R.string.toast_clipboard_sent :
+                    R.string.toast_clipboard_failed, Toast.LENGTH_LONG).show());
         }, "phone-clipboard-send").start();
     }
 
     static void sendSelectedFileToComputer(Context context) {
         if (BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(context)) {
-            Toast.makeText(context, "传文件请让手机和电脑连同一个 Wi-Fi", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, R.string.toast_file_needs_wifi, Toast.LENGTH_LONG).show();
             return;
         }
         String address = context.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_address", "");
         String token = context.getSharedPreferences("bridge", MODE_PRIVATE).getString("computer_token", "");
         if (address.isEmpty() || token.isEmpty()) {
-            Toast.makeText(context, "请先连接小窝", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, R.string.toast_connect_first, Toast.LENGTH_LONG).show();
             return;
         }
-        Toast.makeText(context, "正在发送文件到小窝…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(context, R.string.toast_file_sending, Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            String result = "小窝暂时没收到文件，稍后再试";
+            String result = context.getString(R.string.toast_file_failed);
             HttpURLConnection connection = null;
             try {
                 connection = (HttpURLConnection) new URL("http://" + address + ":8793/file-ready").openConnection();
@@ -824,7 +861,7 @@ public class MainActivity extends Activity {
                     }
                     JSONObject reply = new JSONObject(buffer.toString("UTF-8"));
                     if (connection.getResponseCode() == 200)
-                        result = "已到小窝：" + fileName(reply.optString("saved", "文件"));
+                        result = context.getString(R.string.toast_file_sent, fileName(reply.optString("saved", context.getString(R.string.toast_file_name))));
                     else result = reply.optString("error", reply.optString("message", result));
                 }
             } catch (Exception ignored) {
@@ -856,6 +893,7 @@ public class MainActivity extends Activity {
         text.setText(value);
         text.setTextSize(size);
         text.setTextColor(color);
+        text.setGravity(Gravity.START);
         text.setLineSpacing(0, 1.14f);
         if (bold) text.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         return text;
@@ -866,6 +904,9 @@ public class MainActivity extends Activity {
         button.setText(value);
         button.setAllCaps(false);
         button.setTextSize(15);
+        button.setSingleLine(false);
+        button.setMaxLines(2);
+        button.setMinHeight(dp(48));
         button.setTextColor(primary ? Color.WHITE : CORAL_DARK);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         button.setBackground(round(primary ? CORAL : CREAM, primary ? CORAL : BORDER, 14));

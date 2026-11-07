@@ -1,6 +1,7 @@
 package com.ewan.wallpaperbridge;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothServerSocket;
@@ -70,6 +71,7 @@ final class BluetoothLink implements AutoCloseable {
         host.changed();
     }
     private void setState(String value) { state = value; host.changed(); }
+    @SuppressLint("MissingPermission") // permission() is checked at the start of each loop
     private void listen() {
         while (!closed) {
             try {

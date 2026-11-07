@@ -11,5 +11,6 @@
     <style name="CatDiaoDialogTheme" parent="android:style/Theme.Material.Light.Dialog.NoActionBar">
         <item name="android:colorAccent">#B95038</item>
         <item name="android:fontFamily">sans</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
     </style>
 </resources>

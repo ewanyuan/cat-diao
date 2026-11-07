@@ -1,6 +1,5 @@
 package com.ewan.wallpaperbridge;
 
-import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
@@ -11,12 +10,16 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class QuickActionsActivity extends Activity {
+/** Quick panel opened by the floating cat. Close hides the panel; Turn off cat disables the overlay. */
+public class QuickActionsActivity extends CatDiaoActivity {
     private static final int FILE_PICKER = 31;
     private static final int CREAM = Color.rgb(250, 247, 241);
     private static final int INK = Color.rgb(61, 52, 47);
@@ -32,58 +35,72 @@ public class QuickActionsActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         setFinishOnTouchOutside(true);
+        int maxHeight = (int) (getResources().getDisplayMetrics().heightPixels * 0.78f);
+        ScrollView scroll = new ScrollView(this) {
+            @Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST));
+            }
+        };
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(22), dp(20), dp(22), dp(18));
+        body.setPadding(dp(22), dp(18), dp(22), dp(16));
         body.setBackgroundColor(CREAM);
 
-        TextView title = label("猫叼", 20, INK, true);
-        body.addView(title);
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = label(getString(R.string.panel_title), 20, INK, true);
+        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView dismiss = label(getString(R.string.panel_dismiss), 15, CORAL, true);
+        dismiss.setPaddingRelative(dp(12), dp(8), 0, dp(8));
+        dismiss.setOnClickListener(view -> finish());
+        header.addView(dismiss);
+        body.addView(header);
 
-        TextView caption = label("刚复制的内容", 13, MUTED, false);
+        TextView caption = label(getString(R.string.panel_caption), 13, MUTED, false);
         caption.setPadding(0, dp(13), 0, 0);
         body.addView(caption);
-        preview = label("正在读取剪贴板…", 14, INK, false);
+        preview = label(getString(R.string.panel_reading), 14, INK, false);
         preview.setMaxLines(3);
         preview.setEllipsize(TextUtils.TruncateAt.END);
         preview.setPadding(dp(12), dp(11), dp(12), dp(11));
         preview.setBackground(round(Color.WHITE, BORDER, 12));
-        LinearLayout.LayoutParams previewLayout = new LinearLayout.LayoutParams(-1, -2);
+        LinearLayout.LayoutParams previewLayout = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         previewLayout.topMargin = dp(7);
         body.addView(preview, previewLayout);
 
-        collect = button("收藏复制内容", true);
+        collect = button(getString(R.string.panel_save), true);
         addAction(body, collect, 15);
         collect.setEnabled(false);
         collect.setOnClickListener(view -> collectCopiedText());
-        sendText = button("复制文字发到小窝", false);
+        sendText = button(getString(R.string.panel_send_text), false);
         addAction(body, sendText, 9);
         sendText.setEnabled(false);
         sendText.setOnClickListener(view -> MainActivity.sendClipboardToComputer(this));
 
-        Button sendFile = button("发送文件到小窝", false);
+        Button sendFile = button(getString(R.string.panel_send_file), false);
         addAction(body, sendFile, 9);
         sendFile.setOnClickListener(view -> chooseFile());
 
-        TextView openApp = label("查看收藏  ›", 13, MUTED, false);
-        openApp.setGravity(Gravity.CENTER);
-        openApp.setPadding(0, dp(17), 0, 0);
-        body.addView(openApp);
-        openApp.setOnClickListener(view -> {
+        LinearLayout openRow = linkRow(getString(R.string.panel_open_saves));
+        openRow.setOnClickListener(view -> {
             startActivity(new Intent(this, MainActivity.class));
             finish();
         });
+        body.addView(openRow);
 
-        TextView hideCat = label("关闭悬浮猫", 13, MUTED, false);
+        TextView hideCat = label(getString(R.string.panel_disable), 14, MUTED, true);
         hideCat.setGravity(Gravity.CENTER);
-        hideCat.setPadding(0, dp(14), 0, 0);
+        hideCat.setPadding(0, dp(16), 0, dp(4));
         body.addView(hideCat);
         hideCat.setOnClickListener(view -> {
             BridgeService.setOverlay(this, false);
-            Toast.makeText(this, "悬浮猫已关闭，可在猫叼「更多」里重新打开", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.overlay_off_toast, Toast.LENGTH_LONG).show();
             finish();
         });
-        setContentView(body);
+        scroll.addView(body);
+        setContentView(scroll);
     }
 
     @Override protected void onStart() {
@@ -105,11 +122,11 @@ public class QuickActionsActivity extends Activity {
                 clip.getItemAt(0).coerceToText(this);
         copiedText = content == null ? "" : content.toString().trim();
         boolean available = !copiedText.isEmpty();
-        preview.setText(available ? copiedText : "还没有复制内容。也可以从文章页面直接分享给猫叼。");
+        preview.setText(available ? copiedText : getString(R.string.panel_empty));
         collect.setEnabled(available);
         sendText.setEnabled(available);
         collect.setText(copiedText.contains("http://") || copiedText.contains("https://")
-                ? "收藏这个链接" : "收藏这段文字");
+                ? getString(R.string.panel_save_link) : getString(R.string.panel_save_text));
     }
 
     private void collectCopiedText() {
@@ -117,16 +134,16 @@ public class QuickActionsActivity extends Activity {
         try (CaptureStore store = new CaptureStore(this)) {
             store.save("悬浮猫", copiedText);
             BridgeService.requestCaptureSync();
-            Toast.makeText(this, "已叼在嘴里，连上小窝后自动送达", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.panel_saved, Toast.LENGTH_LONG).show();
             finish();
         } catch (Exception error) {
-            Toast.makeText(this, "收藏没成功，请再试一次", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.panel_save_failed, Toast.LENGTH_LONG).show();
         }
     }
 
     private void chooseFile() {
         if (BridgeService.trustedName(this).isEmpty()) {
-            Toast.makeText(this, "请先在猫叼连接小窝", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.panel_need_link, Toast.LENGTH_LONG).show();
             return;
         }
         Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -140,18 +157,30 @@ public class QuickActionsActivity extends Activity {
         if (requestCode != FILE_PICKER || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         try {
-            getContentResolver().takePersistableUriPermission(uri,
-                    data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             BridgeService.shareFile(this, uri);
             MainActivity.sendSelectedFileToComputer(this);
             finish();
         } catch (Exception error) {
-            Toast.makeText(this, "这个文件打不开，请换一个再试", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.toast_file_unopenable, Toast.LENGTH_LONG).show();
         }
     }
 
+    private LinearLayout linkRow(String text) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        row.setPadding(0, dp(16), 0, 0);
+        row.addView(label(text, 13, MUTED, false));
+        TextView arrow = label(getString(R.string.chevron_forward), 13, MUTED, false);
+        arrow.setPaddingRelative(dp(6), 0, 0, 0);
+        row.addView(arrow);
+        return row;
+    }
+
     private void addAction(LinearLayout body, Button action, int topMargin) {
-        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(-1, dp(48));
+        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         layout.topMargin = dp(topMargin);
         body.addView(action, layout);
     }
@@ -161,6 +190,7 @@ public class QuickActionsActivity extends Activity {
         label.setText(value);
         label.setTextSize(size);
         label.setTextColor(color);
+        label.setGravity(Gravity.START);
         if (bold) label.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         return label;
     }
@@ -170,6 +200,9 @@ public class QuickActionsActivity extends Activity {
         button.setText(value);
         button.setAllCaps(false);
         button.setTextSize(15);
+        button.setSingleLine(false);
+        button.setMaxLines(2);
+        button.setMinHeight(dp(48));
         button.setTextColor(primary ? Color.WHITE : INK);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         button.setBackground(round(primary ? CORAL : Color.WHITE, primary ? CORAL : BORDER, 14));

@@ -16,7 +16,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class CaptureActivity extends Activity {
+public class CaptureActivity extends CatDiaoActivity {
     static final String ACTION_CLIPBOARD = "com.ewan.wallpaperbridge.CAPTURE_CLIPBOARD";
     private static final int CREAM = Color.rgb(250, 247, 241);
     private static final int INK = Color.rgb(61, 52, 47);
@@ -55,20 +55,20 @@ public class CaptureActivity extends Activity {
         cat.setScaleType(ImageView.ScaleType.FIT_CENTER);
         layout.addView(cat, new LinearLayout.LayoutParams(-1, dp(56)));
         TextView heading = new TextView(this);
-        heading.setText("保存文字或链接");
+        heading.setText(R.string.capture_title);
         heading.setTextSize(21);
         heading.setTextColor(INK);
         heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         heading.setGravity(Gravity.CENTER);
         layout.addView(heading);
         TextView hint = new TextView(this);
-        hint.setText("离线时先叼在嘴里，连上小窝后自动送达。");
+        hint.setText(R.string.capture_hint);
         hint.setTextColor(MUTED);
         hint.setTextSize(13);
         hint.setGravity(Gravity.CENTER);
         layout.addView(hint);
         input = new EditText(this);
-        input.setHint("文章链接或分享文字");
+        input.setHint(R.string.capture_field);
         input.setTextColor(INK);
         input.setHintTextColor(MUTED);
         input.setTextSize(15);
@@ -80,8 +80,10 @@ public class CaptureActivity extends Activity {
         inputLayout.topMargin = dp(14);
         layout.addView(input, inputLayout);
         Button save = new Button(this);
-        save.setText("保存到收藏");
+        save.setText(R.string.capture_save);
         save.setAllCaps(false);
+        save.setSingleLine(false);
+        save.setMaxLines(2);
         save.setTextColor(Color.WHITE);
         save.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         save.setBackground(round(CORAL, CORAL, 14));
@@ -91,7 +93,7 @@ public class CaptureActivity extends Activity {
         layout.addView(save, saveLayout);
         save.setOnClickListener(view -> {
             if (input.getText().toString().trim().isEmpty()) {
-                Toast.makeText(this, "请先复制或粘贴链接", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.capture_need_text, Toast.LENGTH_SHORT).show();
             } else {
                 save(input.getText().toString(), "复制链接");
                 finish();
@@ -125,9 +127,9 @@ public class CaptureActivity extends Activity {
             try { startForegroundService(new Intent(this, BridgeService.class)); }
             catch (RuntimeException ignored) { }
             BridgeService.requestCaptureSync();
-            Toast.makeText(this, "已叼在嘴里，连上小窝后自动送达", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.capture_saved, Toast.LENGTH_LONG).show();
         } catch (Exception error) {
-            Toast.makeText(this, "收藏没成功，请再试一次", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.capture_failed, Toast.LENGTH_LONG).show();
         }
     }
 

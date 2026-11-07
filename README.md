@@ -50,7 +50,7 @@ Codex 会把仓库中的 [`cat-diao/`](cat-diao/) 放到当前用户的技能目
 
 ### 使用边界
 
-手机和电脑通过局域网 HTTP 通信。配对令牌不会放到网络上，每次请求单独签名；正文仍是明文，请在信任的 Wi-Fi 上使用，避免传输敏感文件。手机锁屏或长时间熄屏时可能暂停连接；解锁后再试。猫叼不在前台时，打开其他应用可能需要点手机通知。受系统保护的页面可能无法截图。当前手机界面为中文，发布包尚未在全新电脑和其他安卓机型上验证。
+手机和电脑通过局域网 HTTP 通信。配对令牌不会放到网络上，每次请求单独签名；正文仍是明文，请在信任的 Wi-Fi 上使用，避免传输敏感文件。手机锁屏或长时间熄屏时可能暂停连接；解锁后再试。猫叼不在前台时，打开其他应用可能需要点手机通知。受系统保护的页面可能无法截图。手机界面默认跟随系统语言，也可在「更多」里选择语言。简体中文、繁体中文、英语及其他 17 种主流语言已放入应用；这些译文未经母语者审校。发布包尚未在全新电脑和其他安卓机型上验证。
 
 安卓源码在 [`android/`](android/)；可用 Android Studio 导入。构建配置采用 Android Gradle Plugin 8.7.3、Android SDK 36 和 Java 17。仓库不含签名密钥，自行构建的 APK 通常不能直接覆盖这里提供的安装包。
 
@@ -88,7 +88,7 @@ Received links are recorded in monthly Excel files and a local database under `%
 
 ### Limits and source
 
-Phone and PC communicate over local HTTP using a pairing token. Use a trusted Wi-Fi network and avoid sending sensitive files. A locked or sleeping phone may pause the connection. Opening another app while Cat Diao is in the background may require tapping a phone notification; some protected screens cannot be captured. The Android UI is currently in Chinese. Fresh-PC setup and other Android models have not yet been verified.
+Phone and PC communicate over local HTTP using a pairing token. Use a trusted Wi-Fi network and avoid sending sensitive files. A locked or sleeping phone may pause the connection. Opening another app while Cat Diao is in the background may require tapping a phone notification; some protected screens cannot be captured. The phone UI follows the system language by default. More also offers an in-app language choice. Simplified Chinese, Traditional Chinese, English, and 17 other mainstream languages are included; those translations have not been reviewed by native speakers. Fresh-PC setup and other Android models have not yet been verified.
 
 Android source is in [`android/`](android/). Import it with Android Studio; the project specifies Android Gradle Plugin 8.7.3, Android SDK 36, and Java 17. Signing keys are not included, so your own build normally cannot update the bundled APK in place.
 
