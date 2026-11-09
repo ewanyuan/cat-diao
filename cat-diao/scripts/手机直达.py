@@ -36,7 +36,7 @@ MDNS_PORT = 5353
 MDNS_GROUP = "224.0.0.251"
 SERVICE_TYPE = "_catdiao._tcp"
 PAIR_MISS = (
-    "没有找到手机。请在手机「开始连接」页查看地址，再运行 "
+    "没有找到手机。请在手机「连接电脑」的「帮助」里查看地址，再运行 "
     "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
     "可以改用手机热点或家里 Wi-Fi。"
 )
@@ -951,7 +951,7 @@ def authenticated(args):
                     raise RuntimeError("小窝连接信息已变化，请重新执行本次操作。")
             else:
                 raise RuntimeError(
-                    "手机暂时没有接收连接。请在手机「开始连接」页查看地址，再运行 "
+                    "手机暂时没有接收连接。请在手机「连接电脑」的「帮助」里查看地址，再运行 "
                     "run.ps1 pair --address http://IP:8767。公司或公共 Wi-Fi 可能隔离设备，"
                     "可以换手机热点或家里 Wi-Fi。")
     return address, token
@@ -1131,12 +1131,12 @@ def diagnosis(status):
 
 def main():
     parser = argparse.ArgumentParser(description="通过局域网控制已允许的安卓手机；无需无线调试")
-    parser.add_argument("--address", help="自动发现失败时，用手机「开始连接」页上的地址；省略则自动寻找")
+    parser.add_argument("--address", help="自动发现失败时，用手机「连接电脑」帮助里的地址；省略则自动寻找")
     parser.add_argument("--nest", help="猫叼小窝目录。也可用 CATDIAO_NEST_HOME，或用户目录里的 .catdiao/config.json")
     commands = parser.add_subparsers(dest="command", required=True)
     pairing = commands.add_parser("pair", help="请求手机允许这台电脑")
     pairing.add_argument("--address", default=argparse.SUPPRESS,
-                         help="自动发现失败时，使用手机‘开始连接’页上的地址；省略则自动寻找")
+                         help="自动发现失败时，使用手机「连接电脑」帮助里的地址；省略则自动寻找")
     pairing.add_argument("--name", default=socket.gethostname())
     pairing.add_argument("--wait", type=int, default=0, help="等手机出现的秒数（每轮自动寻找约 20 秒，找不到会继续重试）；0 表示约 20 秒")
     commands.add_parser("status", help="查看电量、温度、存储、内存与权限")

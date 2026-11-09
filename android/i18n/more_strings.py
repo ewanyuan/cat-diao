@@ -670,9 +670,9 @@ def _onboarding(S, row):
         "Z narzędzia AI na komputerze oglądaj telefon, dotykaj ekranu albo zmieniaj tapetę.",
         "З інструмента ШІ на комп'ютері дивіться телефон, торкайтеся екрана або змінюйте шпалери."))
     S("onb_note_pair", row(
-        "Tap Connect on the home screen. When both show the same 6 digits, tap Allow.",
-        "点首页「开始连接」，手机和电脑显示同样 6 位数字时点允许。",
-        "點首頁「開始連線」，手機和電腦顯示同樣 6 位數字時點允許。",
+        "Tap Connect computer on the home screen. When both show the same 6 digits, tap Allow.",
+        "点首页「连接电脑」。手机和电脑显示同样的 6 位数字时，点允许。",
+        "點首頁「連線電腦」。手機和電腦顯示同樣的 6 位數字時，點允許。",
         "ホームの「接続する」をタップします。両方の 6 桁が同じなら許可します。",
         "홈에서 연결하기를 누르세요. 양쪽의 6자리가 같으면 허용하세요.",
         "Toca Conectar en el inicio. Si ambos muestran las mismas 6 cifras, toca Permitir.",
@@ -764,7 +764,45 @@ def _onboarding(S, row):
 
 
 def _connection(S, row):
-    S("conn_close", row("Close", "关闭", "關閉", "閉じる", "닫기", "Cerrar", "Fermer", "Schließen", "Fechar", "Закрыть", "إغلاق", "बंद करें", "Tutup", "Đóng", "ปิด", "Chiudi", "Kapat", "Sluiten", "Zamknij", "Закрити"))
+    S("conn_close", row("Leave guide", "退出引导", "退出引導", "ガイドを出る", "안내 나가기", "Salir de la guía", "Quitter le guide", "Anleitung verlassen", "Sair do guia", "Выйти из подсказок", "اخرج من الدليل", "गाइड छोड़ें", "Keluar dari panduan", "Thoát hướng dẫn", "ออกจากคำแนะนำ", "Esci dalla guida", "Kılavuzdan çık", "Gids verlaten", "Wyjdź z przewodnika", "Вийти з підказок"))
+    S("conn_back", row("Back", "返回", "返回", "戻る", "뒤로", "Atrás", "Retour", "Zurück", "Voltar", "Назад", "رجوع", "वापस", "Kembali", "Quay lại", "กลับ", "Indietro", "Geri", "Terug", "Wstecz", "Назад"))
+    S("conn_back_mark", row("←", "←", "←", "←", "←", "←", "←", "←", "←", "←", "→", "←", "←", "←", "←", "←", "←", "←", "←", "←"))
+    S("conn_wifi_ok", row(
+        "This phone is on Wi-Fi.", "手机已连上 Wi-Fi。", "手機已連上 Wi-Fi。", "スマホは Wi-Fi につながっています。", "휴대폰이 Wi-Fi에 연결되어 있습니다.",
+        "Este teléfono está en Wi-Fi.", "Ce téléphone est en Wi-Fi.", "Dieses Telefon ist im WLAN.", "Este telefone está no Wi-Fi.", "Этот телефон в сети Wi-Fi.",
+        "هذا الهاتف متصل بشبكة Wi-Fi.", "यह फ़ोन Wi-Fi पर है।", "Ponsel ini ada di Wi-Fi.", "Điện thoại này đang dùng Wi-Fi.", "โทรศัพท์นี้อยู่บน Wi-Fi",
+        "Questo telefono è in Wi-Fi.", "Bu telefon Wi-Fi'de.", "Deze telefoon zit op wifi.", "Ten telefon jest w sieci Wi-Fi.", "Цей телефон у мережі Wi-Fi."))
+    S("conn_code_pending", row(
+        "The 6 digits will show here", "6 位数字会出现在这里", "6 位數字會出現在這裡", "6 桁はここに出ます", "6자리가 여기에 나옵니다",
+        "Los 6 dígitos aparecerán aquí", "Les 6 chiffres s'afficheront ici", "Die 6 Ziffern erscheinen hier", "Os 6 dígitos aparecem aqui", "6 цифр появятся здесь",
+        "ستظهر الأرقام الستة هنا", "6 अंक यहाँ दिखेंगे", "6 digit akan muncul di sini", "6 số sẽ hiện ở đây", "เลข 6 หลักจะขึ้นที่นี่",
+        "Le 6 cifre compariranno qui", "6 hane burada görünecek", "De 6 cijfers verschijnen hier", "6 cyfr pojawi się tutaj", "6 цифр з'являться тут"))
+    S("conn_show_qr", row("Use a QR code", "改用二维码", "改用二維條碼", "QRコードを使う", "QR 코드 사용", "Usar un código QR", "Utiliser un QR code", "QR-Code verwenden", "Usar um QR code", "Показать QR-код", "استخدم رمز QR", "QR कोड इस्तेमाल करें", "Pakai kode QR", "Dùng mã QR", "ใช้คิวอาร์โค้ด", "Usa un codice QR", "QR kodu kullan", "QR-code gebruiken", "Użyj kodu QR", "Показати QR-код"))
+    S("conn_hide_qr", row("Hide the QR code", "收起二维码", "收起二維條碼", "QRコードを隠す", "QR 코드 숨기기", "Ocultar el código QR", "Masquer le QR code", "QR-Code ausblenden", "Ocultar o QR code", "Скрыть QR-код", "أخفِ رمز QR", "QR कोड छिपाएँ", "Sembunyikan kode QR", "Ẩn mã QR", "ซ่อนคิวอาร์โค้ด", "Nascondi il codice QR", "QR kodunu gizle", "QR-code verbergen", "Ukryj kod QR", "Сховати QR-код"))
+    S("conn_recheck", row("I've switched Wi-Fi", "我已连好，再检查", "我已連好，再檢查", "つないだので再確認", "연결했으니 다시 확인", "Ya estoy en el Wi-Fi", "Je suis sur le Wi-Fi", "WLAN ist verbunden", "Já estou no Wi-Fi", "Я уже в сети Wi-Fi", "اتصلت، أعد الفحص", "जुड़ गया, फिर जाँचें", "Sudah tersambung", "Tôi đã kết nối", "เชื่อมแล้ว ตรวจอีกครั้ง", "Sono connesso", "Bağlandım, yeniden bak", "Ik ben verbonden", "Już połączono", "Я вже підключився"))
+    S("conn_try", row("Try a sentence now", "现在复制一句话试试", "現在複製一句話試試", "今すぐ一文を試す", "지금 한 문장 시험", "Probar una frase ahora", "Essayer une phrase", "Jetzt einen Satz testen", "Testar uma frase agora", "Попробовать фразу", "جرّب جملة الآن", "अभी एक वाक्य आज़माएँ", "Coba satu kalimat", "Thử một câu ngay", "ลองหนึ่งประโยคตอนนี้", "Prova una frase ora", "Şimdi bir cümle dene", "Probeer nu een zin", "Wypróbuj zdanie", "Спробувати речення"))
+    S("conn_try_sample", row(
+        "Cat Diao test: this sentence reached the computer.",
+        "猫叼试一下：这句话到电脑了。",
+        "貓叼試一下：這句話到電腦了。",
+        "キャットディオのテスト：この文がパソコンに届きました。",
+        "캣댜오 시험: 이 문장이 컴퓨터에 도착했습니다.",
+        "Prueba de Cat Diao: esta frase llegó al ordenador.",
+        "Essai Cat Diao : cette phrase est arrivée sur l'ordinateur.",
+        "Cat-Diao-Test: Dieser Satz ist am Computer angekommen.",
+        "Teste do Cat Diao: esta frase chegou ao computador.",
+        "Проверка Кэт Дяо: эта фраза дошла до компьютера.",
+        "تجربة كات دياو: وصلت هذه الجملة إلى الكمبيوتر.",
+        "कैट डियाओ परीक्षण: यह वाक्य कंप्यूटर तक पहुँचा।",
+        "Uji Cat Diao: kalimat ini sampai ke komputer.",
+        "Thử Cat Diao: câu này đã tới máy tính.",
+        "ทดสอบแคทเดียว: ประโยคนี้ไปถึงคอมพิวเตอร์แล้ว",
+        "Prova Cat Diao: questa frase è arrivata sul computer.",
+        "Cat Diao denemesi: bu cümle bilgisayara ulaştı.",
+        "Cat Diao-test: deze zin is op de computer aangekomen.",
+        "Test Cat Diao: to zdanie dotarło do komputera.",
+        "Перевірка Кет Дяо: це речення дійшло до комп'ютера."))
+    S("conn_copy_command", row("Copy the command", "复制命令", "複製命令", "コマンドをコピー", "명령 복사", "Copiar el comando", "Copier la commande", "Befehl kopieren", "Copiar o comando", "Копировать команду", "انسخ الأمر", "कमांड कॉपी करें", "Salin perintah", "Chép lệnh", "คัดลอกคำสั่ง", "Copia il comando", "Komutu kopyala", "Opdracht kopiëren", "Kopiuj polecenie", "Копіювати команду"))
     S("conn_copy_tip", row(
         "Paste this to the AI on your computer.", "复制后发给电脑上的 AI 即可。", "複製後發給電腦上的 AI 即可。", "パソコンの AI に貼り付けます。", "컴퓨터의 AI에 붙여 넣으세요.",
         "Pégalo en la IA de tu ordenador.", "Collez ceci dans l'IA de votre ordinateur.", "Füge das bei der KI auf dem Computer ein.", "Cole isto na IA do computador.", "Вставьте это в ИИ на компьютере.",
@@ -783,8 +821,8 @@ def _connection(S, row):
     S("conn_qr_cd", row(
         "Connection address code", "连接地址二维码", "連線位址二維條碼", "接続アドレスのコード", "연결 주소 코드", "Código de la dirección", "Code de l'adresse", "Code der Adresse", "Código do endereço", "Код адреса",
         "رمز عنوان الاتصال", "पते का कोड", "Kode alamat sambungan", "Mã địa chỉ kết nối", "รหัสที่อยู่การเชื่อมต่อ", "Codice dell'indirizzo", "Bağlantı adresi kodu", "Code van het adres", "Kod adresu", "Код адреси"))
-    S("conn_advanced_show", row("Advanced", "高级", "進階", "詳細", "고급", "Avanzado", "Avancé", "Erweitert", "Avançado", "Дополнительно", "متقدم", "उन्नत", "Lanjutan", "Nâng cao", "ขั้นสูง", "Avanzate", "Gelişmiş", "Geavanceerd", "Zaawansowane", "Додатково"))
-    S("conn_advanced_hide", row("Hide advanced", "收起高级", "收起進階", "詳細を閉じる", "고급 접기", "Ocultar avanzado", "Masquer les options", "Erweitert ausblenden", "Ocultar avançado", "Скрыть дополнительно", "إخفاء المتقدم", "उन्नत छिपाएँ", "Sembunyikan lanjutan", "Ẩn nâng cao", "ซ่อนขั้นสูง", "Nascondi avanzate", "Gelişmişi gizle", "Geavanceerd verbergen", "Ukryj zaawansowane", "Сховати додаткове"))
+    S("conn_advanced_show", row("Help", "帮助", "幫助", "ヘルプ", "도움말", "Ayuda", "Aide", "Hilfe", "Ajuda", "Помощь", "مساعدة", "मदद", "Bantuan", "Trợ giúp", "ช่วยเหลือ", "Aiuto", "Yardım", "Hulp", "Pomoc", "Допомога"))
+    S("conn_advanced_hide", row("Hide help", "收起帮助", "收起幫助", "ヘルプを閉じる", "도움말 접기", "Ocultar ayuda", "Masquer l'aide", "Hilfe ausblenden", "Ocultar ajuda", "Скрыть помощь", "أخفِ المساعدة", "मदद छिपाएँ", "Sembunyikan bantuan", "Ẩn trợ giúp", "ซ่อนความช่วยเหลือ", "Nascondi aiuto", "Yardımı gizle", "Hulp verbergen", "Ukryj pomoc", "Сховати допомогу"))
     S("conn_copy_address", row("Copy address", "复制地址", "複製位址", "アドレスをコピー", "주소 복사", "Copiar dirección", "Copier l'adresse", "Adresse kopieren", "Copiar endereço", "Копировать адрес", "نسخ العنوان", "पता कॉपी करें", "Salin alamat", "Chép địa chỉ", "คัดลอกที่อยู่", "Copia indirizzo", "Adresi kopyala", "Adres kopiëren", "Kopiuj adres", "Копіювати адресу"))
     S("conn_pair_expired", row(
         "This request expired. Start again from the computer.", "这条连接请求已失效，请从电脑重新发起", "這筆連線要求已失效，請從電腦重新發起", "この接続要求は期限切れです。パソコンからやり直してください。", "이 연결 요청은 만료되었습니다. 컴퓨터에서 다시 시작하세요.",
@@ -799,17 +837,53 @@ def _connection(S, row):
         "Collegati prima alla stessa Wi-Fi del computer", "Önce bilgisayarla aynı Wi-Fi'ye katıl", "Ga eerst op hetzelfde wifi-netwerk als de computer", "Najpierw połącz się z tą samą siecią Wi-Fi co komputer", "Спочатку підключіться до того ж Wi-Fi, що й комп'ютер"))
     S("conn_not_paired_title", row("Connect", "连接电脑", "連線電腦", "接続", "연결", "Conectar", "Connecter", "Verbinden", "Conectar", "Подключить", "اتصال", "कनेक्ट", "Hubungkan", "Kết nối", "เชื่อมต่อ", "Connetti", "Bağlan", "Verbinden", "Połącz", "Підключити"))
     S("conn_not_paired_body", row(
-        "Not connected yet. Saves stay on this phone.", "还没连上电脑。收藏会先留在这台手机里。", "還沒連上電腦。收藏會先留在這支手機裡。", "まだ未接続です。保存はこのスマホに残ります。", "아직 연결되지 않았습니다. 저장은 이 휴대폰에 남습니다.",
-        "Aún sin conexión. Lo guardado se queda en este teléfono.", "Pas encore connecté. Les enregistrements restent ici.", "Noch nicht verbunden. Sicherungen bleiben auf diesem Telefon.", "Ainda sem conexão. Os salvos ficam neste telefone.", "Пока нет связи. Записи остаются на этом телефоне.",
-        "لم يتصل بعد. المحفوظات تبقى على هذا الهاتف.", "अभी जुड़ा नहीं। सेव इस फ़ोन पर रहते हैं।", "Belum tersambung. Simpanan tetap di ponsel ini.", "Chưa kết nối. Mục đã lưu ở lại điện thoại này.", "ยังไม่เชื่อมต่อ รายการอยู่บนโทรศัพท์นี้",
-        "Non ancora connesso. I salvataggi restano su questo telefono.", "Henüz bağlı değil. Kayıtlar bu telefonda kalır.", "Nog niet verbonden. Items blijven op deze telefoon.", "Jeszcze bez połączenia. Zapisy zostają w tym telefonie.", "Ще немає зв'язку. Записи лишаються на цьому телефоні."))
+        "Send the line below to the PC's AI. It installs Cat Diao from GitHub (needs Python 3) on the same Wi-Fi.",
+        "把下面这句话发给电脑上的 AI，让它从 GitHub 装好猫叼（需要 Python 3），并连同一个 Wi-Fi。",
+        "把下面這句話發給電腦上的 AI，讓它從 GitHub 裝好貓叼（需要 Python 3），並連同一個 Wi-Fi。",
+        "下の文をパソコンの AI に送ってください。GitHub からキャットディオを入れ（Python 3 が必要）、同じ Wi-Fi でつなぎます。",
+        "아래 문장을 컴퓨터의 AI에 보내세요. GitHub에서 캣댜오를 설치하고(Python 3 필요) 같은 Wi-Fi로 연결합니다.",
+        "Envía la frase de abajo a la IA del PC. Instala Cat Diao desde GitHub (hace falta Python 3) en el mismo Wi-Fi.",
+        "Envoyez la phrase ci-dessous à l'IA du PC. Elle installe Cat Diao depuis GitHub (Python 3 requis) sur le même Wi-Fi.",
+        "Schick den Satz unten an die KI am PC. Sie installiert Cat Diao von GitHub (Python 3 nötig) im selben WLAN.",
+        "Envie a frase abaixo à IA do PC. Ela instala o Cat Diao do GitHub (precisa do Python 3) no mesmo Wi-Fi.",
+        "Отправьте фразу ниже ИИ на компьютере. Он ставит Кэт Дяо с GitHub (нужен Python 3) в той же сети Wi-Fi.",
+        "أرسل الجملة أدناه إلى ذكاء الكمبيوتر. يثبّت كات دياو من GitHub (يلزم Python 3) على شبكة Wi-Fi نفسها.",
+        "नीचे की पंक्ति कंप्यूटर की AI को भेजें। वह GitHub से कैट डियाओ इंस्टॉल करती है (Python 3 चाहिए), उसी Wi-Fi पर।",
+        "Kirim kalimat di bawah ke AI komputer. Ia memasang Cat Diao dari GitHub (perlu Python 3) di Wi-Fi yang sama.",
+        "Gửi câu bên dưới cho AI trên máy tính. Nó cài Cat Diao từ GitHub (cần Python 3) trên cùng Wi-Fi.",
+        "ส่งประโยคด้านล่างให้ AI บนคอมพิวเตอร์ ให้ติดตั้งแคทเดียวจาก GitHub (ต้องมี Python 3) บน Wi-Fi เดียวกัน",
+        "Invia la frase sotto all'IA del PC. Installa Cat Diao da GitHub (serve Python 3) sulla stessa Wi-Fi.",
+        "Aşağıdaki cümleyi bilgisayarın yapay zekâsına gönder. Cat Diao'yu GitHub'dan kurar (Python 3 gerekir), aynı Wi-Fi'de.",
+        "Stuur de zin hieronder naar de AI op de pc. Die installeert Cat Diao vanaf GitHub (Python 3 nodig) op hetzelfde wifi-netwerk.",
+        "Wyślij zdanie poniżej do AI na komputerze. Zainstaluje Cat Diao z GitHub (potrzebny Python 3) w tej samej sieci Wi-Fi.",
+        "Надішліть речення нижче ШІ на комп'ютері. Він установить Кет Дяо з GitHub (потрібен Python 3) у тій самій мережі Wi-Fi."))
     S("conn_start", row("Start", "开始连接", "開始連線", "開始", "시작", "Empezar", "Commencer", "Starten", "Começar", "Начать", "ابدأ", "शुरू", "Mulai", "Bắt đầu", "เริ่ม", "Inizia", "Başla", "Starten", "Zacznij", "Почати"))
-    S("conn_waiting_title", row("Waiting", "等电脑", "等電腦", "パソコン待ち", "컴퓨터 대기", "Esperando", "En attente", "Warten", "Aguardando", "Ожидание", "انتظار", "प्रतीक्षा", "Menunggu", "Đang chờ", "กำลังรอ", "In attesa", "Bekleniyor", "Wachten", "Oczekiwanie", "Очікування"))
+    S("conn_waiting_title", row(
+        "Waiting for the computer…", "正在等待电脑连接…", "正在等待電腦連線…", "パソコンの接続を待っています…", "컴퓨터 연결을 기다리는 중…",
+        "Esperando al ordenador…", "En attente de l'ordinateur…", "Warte auf den Computer…", "Aguardando o computador…", "Ожидание компьютера…",
+        "بانتظار الكمبيوتر…", "कंप्यूटर का इंतज़ार…", "Menunggu komputer…", "Đang chờ máy tính kết nối…", "กำลังรอคอมพิวเตอร์เชื่อมต่อ…",
+        "In attesa del computer…", "Bilgisayar bekleniyor…", "Wachten op de computer…", "Oczekiwanie na komputer…", "Очікування комп'ютера…"))
     S("conn_waiting_body", row(
-        "Send either one to the AI on your computer.", "任选一种发给电脑上的 AI，人不用管。", "任選一種發給電腦上的 AI，人不用管。", "どちらかをパソコンの AI に送ってください。", "둘 중 하나를 컴퓨터의 AI에 보내세요.",
-        "Envía cualquiera de las dos a la IA del ordenador.", "Envoyez l'une ou l'autre à l'IA de l'ordinateur.", "Schick eines von beiden an die KI auf dem Computer.", "Envie qualquer um dos dois para a IA do computador.", "Отправьте любой из вариантов ИИ на компьютере.",
-        "أرسل أيًّا منهما إلى الذكاء الاصطناعي على الكمبيوتر.", "दोनों में से कोई एक कंप्यूटर की AI को भेजें।", "Kirim salah satunya ke AI di komputer.", "Gửi một trong hai cho AI trên máy tính.", "ส่งอย่างใดอย่างหนึ่งให้ AI บนคอมพิวเตอร์",
-        "Invia uno dei due all'IA del computer.", "İkisinden birini bilgisayardaki yapay zekâya gönder.", "Stuur een van beide naar de AI op de computer.", "Wyślij dowolną z nich do AI na komputerze.", "Надішліть будь-який варіант ШІ на комп'ютері."))
+        "Waited %1$d s.",
+        "已等 %1$d 秒。",
+        "已等 %1$d 秒。",
+        "%1$d 秒待ちました。",
+        "%1$d초 기다렸습니다.",
+        "Llevas %1$d s.",
+        "Attente : %1$d s.",
+        "%1$d s gewartet.",
+        "Esperou %1$d s.",
+        "Ожидание %1$d с.",
+        "انتظرت %1$d ث.",
+        "%1$d सेकंड हुए।",
+        "Sudah %1$d detik.",
+        "Đã chờ %1$d giây.",
+        "รอมา %1$d วินาที",
+        "Attesa %1$d s.",
+        "%1$d sn beklendi.",
+        "%1$d s gewacht.",
+        "Czekasz %1$d s.",
+        "Очікування %1$d с."))
     S("conn_copy", row("Copy this line", "复制这句话", "複製這句話", "この文をコピー", "이 문장 복사", "Copiar esta frase", "Copier cette phrase", "Diesen Satz kopieren", "Copiar esta frase", "Скопировать фразу", "انسخ هذه الجملة", "यह वाक्य कॉपी करें", "Salin kalimat ini", "Chép câu này", "คัดลอกประโยคนี้", "Copia questa frase", "Bu cümleyi kopyala", "Kopieer deze zin", "Kopiuj to zdanie", "Скопіювати це речення"))
     S("conn_still_stuck", row("Still not connected", "还是连不上", "還是連不上", "まだつながらない", "아직도 연결 안 됨", "Sigue sin conectar", "Toujours pas connecté", "Immer noch nicht verbunden", "Ainda sem conexão", "Всё ещё нет связи", "ما زال غير متصل", "अब भी नहीं जुड़ा", "Masih belum tersambung", "Vẫn chưa kết nối", "ยังเชื่อมต่อไม่ได้", "Ancora non connesso", "Hâlâ bağlanmadı", "Nog steeds niet verbonden", "Nadal brak połączenia", "Досі немає зв'язку"))
     S("conn_ai_line", row(
@@ -830,7 +904,7 @@ def _connection(S, row):
         "Se coincide con il computer, tocca Consenti. Altrimenti tocca Rifiuta.", "Bilgisayarla aynıysa İzin ver'e dokun. Değilse Reddet'e dokun.", "Komt het overeen met de computer, tik op Toestaan. Zo niet, tik op Weigeren.", "Jeśli zgadza się z komputerem, stuknij Zezwól. Jeśli nie, stuknij Odrzuć.", "Якщо збігається з комп'ютером, торкніться «Дозволити». Якщо ні — «Відхилити»."))
     S("conn_allow", row("Allow", "允许", "允許", "許可", "허용", "Permitir", "Autoriser", "Zulassen", "Permitir", "Разрешить", "السماح", "अनुमति दें", "Izinkan", "Cho phép", "อนุญาต", "Consenti", "İzin ver", "Toestaan", "Zezwól", "Дозволити"))
     S("conn_deny", row("Deny", "拒绝", "拒絕", "拒否", "거절", "Rechazar", "Refuser", "Ablehnen", "Recusar", "Отклонить", "رفض", "अस्वीकार", "Tolak", "Từ chối", "ปฏิเสธ", "Rifiuta", "Reddet", "Weigeren", "Odrzuć", "Відхилити"))
-    S("conn_paired_title", row("Connected", "已连上", "已連上", "接続しました", "연결됨", "Conectado", "Connecté", "Verbunden", "Conectado", "Подключено", "متصل", "जुड़ गया", "Tersambung", "Đã kết nối", "เชื่อมต่อแล้ว", "Connesso", "Bağlandı", "Verbonden", "Połączono", "Підключено"))
+    S("conn_paired_title", row("✓ Connected", "✓ 已连上", "✓ 已連上", "✓ 接続しました", "✓ 연결됨", "✓ Conectado", "✓ Connecté", "✓ Verbunden", "✓ Conectado", "✓ Подключено", "✓ متصل", "✓ जुड़ गया", "✓ Tersambung", "✓ Đã kết nối", "✓ เชื่อมต่อแล้ว", "✓ Connesso", "✓ Bağlandı", "✓ Verbonden", "✓ Połączono", "✓ Підключено"))
     S("conn_paired_body", row(
         "Connected to %1$s.", "已经连上「%1$s」。", "已經連上「%1$s」。", "%1$s に接続しました。", "%1$s에 연결되었습니다.", "Conectado a %1$s.", "Connecté à %1$s.", "Verbunden mit %1$s.", "Conectado a %1$s.", "Подключено к %1$s.",
         "متصل بـ %1$s.", "%1$s से जुड़ गया।", "Tersambung ke %1$s.", "Đã kết nối với %1$s.", "เชื่อมต่อกับ %1$s แล้ว", "Connesso a %1$s.", "%1$s ile bağlandı.", "Verbonden met %1$s.", "Połączono z %1$s.", "Підключено до %1$s."))
@@ -856,90 +930,195 @@ def _connection(S, row):
         "Conecta primero el ordenador y luego configura Bluetooth.", "Connectez d'abord l'ordinateur, puis configurez Bluetooth.", "Verbinde zuerst den Computer, dann richte Bluetooth ein.", "Conecte o computador primeiro e depois configure o Bluetooth.", "Сначала подключите компьютер, затем настройте Bluetooth.",
         "صِل الكمبيوتر أولًا، ثم أعد البلوتوث.", "पहले कंप्यूटर जोड़ें, फिर ब्लूटूथ सेट करें।", "Hubungkan komputer dulu, lalu siapkan Bluetooth.", "Hãy kết nối máy tính trước, rồi thiết lập Bluetooth.", "เชื่อมต่อคอมพิวเตอร์ก่อน แล้วค่อยตั้งค่าบลูทูธ",
         "Collega prima il computer, poi imposta Bluetooth.", "Önce bilgisayarı bağla, sonra Bluetooth'u kur.", "Verbind eerst de computer en stel daarna Bluetooth in.", "Najpierw połącz komputer, potem skonfiguruj Bluetooth.", "Спочатку підключіть комп'ютер, потім налаштуйте Bluetooth."))
-    S("conn_cause_wifi", row(
-        "The phone and computer need the same Wi-Fi, and it must let devices see each other.",
-        "手机和电脑需要连在同一个可互访的 Wi-Fi。",
-        "手機和電腦需要連在同一個可互訪的 Wi-Fi。",
-        "スマホとパソコンは、機器同士が見える同じ Wi-Fi が必要です。",
-        "휴대폰과 컴퓨터는 서로 보이는 같은 Wi-Fi에 있어야 합니다.",
-        "El teléfono y el ordenador necesitan el mismo Wi-Fi, y debe dejar que los dispositivos se vean.",
-        "Le téléphone et l'ordinateur doivent être sur le même Wi-Fi, et les appareils doivent se voir.",
-        "Telefon und Computer brauchen dasselbe WLAN, und die Geräte müssen sich sehen.",
-        "O telefone e o computador precisam do mesmo Wi-Fi, e os aparelhos precisam se enxergar.",
-        "Телефону и компьютеру нужен один Wi-Fi, и устройства должны видеть друг друга.",
-        "يحتاج الهاتف والكمبيوتر إلى شبكة Wi-Fi نفسها، ويجب أن يرى كل جهاز الآخر.",
-        "फ़ोन और कंप्यूटर को एक ही Wi-Fi चाहिए, और डिवाइस एक-दूसरे को देख सकें।",
-        "Ponsel dan komputer perlu Wi-Fi yang sama, dan perangkat harus saling melihat.",
-        "Điện thoại và máy tính cần cùng Wi-Fi, và các thiết bị phải thấy nhau.",
-        "โทรศัพท์และคอมพิวเตอร์ต้องใช้ Wi-Fi เดียวกัน และอุปกรณ์ต้องมองเห็นกัน",
-        "Telefono e computer devono usare la stessa Wi-Fi, e i dispositivi devono vedersi.",
-        "Telefon ve bilgisayar aynı Wi-Fi'de olmalı ve cihazlar birbirini görmeli.",
-        "Telefoon en computer hebben hetzelfde wifi-netwerk nodig, en de apparaten moeten elkaar zien.",
-        "Telefon i komputer potrzebują tego samego Wi-Fi, a urządzenia muszą się widzieć.",
-        "Телефону й комп'ютеру потрібен той самий Wi-Fi, і пристрої мають бачити одне одного."))
-    S("conn_cause_hotspot", row(
-        "Office or public Wi-Fi may block devices. Use the phone hotspot, or try home Wi-Fi.",
-        "公司或公共 Wi-Fi 可能隔离设备。可以让手机开热点，电脑连上热点，或换家里 Wi-Fi。",
-        "公司或公共 Wi-Fi 可能隔離裝置。可以讓手機開熱點，電腦連上熱點，或換家裡 Wi-Fi。",
-        "会社や公共の Wi-Fi は機器を隔離することがあります。スマホのテザリングか自宅の Wi-Fi を試してください。",
-        "회사나 공공 Wi-Fi는 기기를 막을 수 있습니다. 휴대폰 핫스팟이나 집 Wi-Fi를 써 보세요.",
-        "El Wi-Fi de la oficina o público puede aislar los dispositivos. Usa el punto de acceso del teléfono o el Wi-Fi de casa.",
-        "Le Wi-Fi d'entreprise ou public peut isoler les appareils. Utilisez le partage du téléphone ou le Wi-Fi de la maison.",
-        "Büro- oder öffentliches WLAN kann Geräte trennen. Nutze den Hotspot des Telefons oder das WLAN zu Hause.",
-        "O Wi-Fi do trabalho ou público pode isolar os aparelhos. Use o roteador do telefone ou o Wi-Fi de casa.",
-        "Офисный или публичный Wi-Fi может изолировать устройства. Включите точку доступа телефона или домашний Wi-Fi.",
-        "قد تعزل شبكة المكتب أو الشبكة العامة الأجهزة. استخدم نقطة اتصال الهاتف أو شبكة المنزل.",
-        "ऑफ़िस या सार्वजनिक Wi-Fi डिवाइस को अलग कर सकता है। फ़ोन का हॉटस्पॉट या घर का Wi-Fi आज़माएँ।",
-        "Wi-Fi kantor atau publik bisa mengisolasi perangkat. Pakai hotspot ponsel atau Wi-Fi rumah.",
-        "Wi-Fi công ty hoặc công cộng có thể cô lập thiết bị. Hãy dùng điểm phát của điện thoại hoặc Wi-Fi nhà.",
-        "Wi-Fi ที่ทำงานหรือสาธารณะอาจแยกอุปกรณ์ ใช้ฮอตสปอตของโทรศัพท์หรือ Wi-Fi ที่บ้าน",
-        "Il Wi-Fi dell'ufficio o pubblico può isolare i dispositivi. Usa l'hotspot del telefono o il Wi-Fi di casa.",
-        "Ofis veya herkese açık Wi-Fi cihazları ayırabilir. Telefon paylaşımını veya ev Wi-Fi'sini dene.",
-        "Wifi op het werk of openbaar wifi kan apparaten scheiden. Gebruik de hotspot van de telefoon of wifi thuis.",
-        "Firmowe lub publiczne Wi-Fi może izolować urządzenia. Użyj hotspotu telefonu albo domowego Wi-Fi.",
-        "Офісний або публічний Wi-Fi може ізолювати пристрої. Увімкніть точку доступу телефону або домашній Wi-Fi."))
-    S("conn_cause_advanced", row(
-        "If it still fails, send this page's line or code to the AI, or open Advanced.",
-        "还是不行时，把本页短话或二维码截图发给电脑上的 AI；或打开「高级」自己连接。",
-        "還是不行時，把本頁短話或二維條碼截圖發給電腦上的 AI；或打開「進階」自己連線。",
-        "それでもダメなら、この文かコードを AI に送るか、「詳細」で自分で接続します。",
-        "그래도 안 되면 이 문장이나 코드를 AI에 보내거나, 고급에서 직접 연결하세요.",
-        "Si sigue fallando, envía la frase o el código de esta página a la IA, o abre Avanzado.",
-        "Si cela échoue encore, envoyez la phrase ou le code de cette page à l'IA, ou ouvrez Avancé.",
-        "Wenn es weiter scheitert, schick den Satz oder den Code dieser Seite an die KI, oder öffne Erweitert.",
-        "Se ainda falhar, envie a frase ou o código desta página para a IA, ou abra Avançado.",
-        "Если всё ещё не выходит, отправьте фразу или код этой страницы ИИ либо откройте «Дополнительно».",
-        "إذا استمر الفشل، أرسل جملة هذه الصفحة أو الرمز إلى الذكاء الاصطناعي، أو افتح متقدم.",
-        "फिर भी न हो तो इस पेज की पंक्ति या कोड AI को भेजें, या उन्नत खोलें।",
-        "Jika masih gagal, kirim kalimat atau kode halaman ini ke AI, atau buka Lanjutan.",
-        "Nếu vẫn không được, hãy gửi câu hoặc mã ở trang này cho AI, hoặc mở Nâng cao.",
-        "ถ้ายังไม่ได้ ส่งประโยคหรือรหัสในหน้านี้ให้ AI หรือเปิดขั้นสูง",
-        "Se fallisce ancora, invia la frase o il codice di questa pagina all'IA, oppure apri Avanzate.",
-        "Hâlâ olmazsa bu sayfadaki cümleyi veya kodu yapay zekâya gönder ya da Gelişmiş'i aç.",
-        "Lukt het nog niet, stuur de zin of de code van deze pagina naar de AI, of open Geavanceerd.",
-        "Jeśli nadal nie działa, wyślij zdanie lub kod z tej strony do AI albo otwórz Zaawansowane.",
-        "Якщо й далі не виходить, надішліть речення або код цієї сторінки ШІ чи відкрийте «Додатково»."))
+    S("conn_cause_offline", row(
+        "This phone is offline. Join the same Wi-Fi as the computer.",
+        "手机没有网络。请先连上和电脑相同的 Wi-Fi。",
+        "手機沒有網路。請先連上和電腦相同的 Wi-Fi。",
+        "スマホがオフラインです。パソコンと同じ Wi-Fi に接続してください。",
+        "휴대폰이 오프라인입니다. 컴퓨터와 같은 Wi-Fi에 연결하세요.",
+        "Este teléfono está sin red. Únete al mismo Wi-Fi que el ordenador.",
+        "Ce téléphone est hors ligne. Rejoignez le même Wi-Fi que l'ordinateur.",
+        "Dieses Telefon ist offline. Geh ins selbe WLAN wie der Computer.",
+        "Este telefone está offline. Entre no mesmo Wi-Fi do computador.",
+        "Телефон не в сети. Подключитесь к тому же Wi-Fi, что и компьютер.",
+        "هذا الهاتف غير متصل. انضم إلى شبكة Wi-Fi نفسها التي يستخدمها الكمبيوتر.",
+        "यह फ़ोन ऑफ़लाइन है। कंप्यूटर वाले Wi-Fi से जुड़ें।",
+        "Ponsel ini offline. Gabung ke Wi-Fi yang sama dengan komputer.",
+        "Điện thoại này đang ngoại tuyến. Hãy vào cùng Wi-Fi với máy tính.",
+        "โทรศัพท์นี้ออฟไลน์ เชื่อม Wi-Fi เดียวกับคอมพิวเตอร์",
+        "Questo telefono è offline. Collegati alla stessa Wi-Fi del computer.",
+        "Bu telefon çevrimdışı. Bilgisayarla aynı Wi-Fi'ye katıl.",
+        "Deze telefoon is offline. Ga op hetzelfde wifi-netwerk als de computer.",
+        "Ten telefon jest offline. Połącz się z tą samą siecią Wi-Fi co komputer.",
+        "Цей телефон не в мережі. Підключіться до того ж Wi-Fi, що й комп'ютер."))
+    S("conn_cause_cellular", row(
+        "This phone is on mobile data, so the computer cannot reach it. Switch to the same Wi-Fi.",
+        "手机正在用流量，电脑连不上。请改连和电脑相同的 Wi-Fi。",
+        "手機正在用流量，電腦連不上。請改連和電腦相同的 Wi-Fi。",
+        "スマホはモバイルデータ通信中で、パソコンから届きません。同じ Wi-Fi に切り替えてください。",
+        "휴대폰이 모바일 데이터를 쓰고 있어 컴퓨터가 닿지 않습니다. 같은 Wi-Fi로 바꾸세요.",
+        "Este teléfono usa datos móviles y el ordenador no puede llegar. Cambia al mismo Wi-Fi.",
+        "Ce téléphone est en données mobiles, l'ordinateur ne peut pas l'atteindre. Passez au même Wi-Fi.",
+        "Dieses Telefon nutzt mobile Daten, der Computer kommt nicht heran. Wechsle ins selbe WLAN.",
+        "Este telefone está nos dados móveis e o computador não alcança. Mude para o mesmo Wi-Fi.",
+        "Телефон на мобильной сети, компьютер до него не доходит. Перейдите в тот же Wi-Fi.",
+        "هذا الهاتف يستخدم بيانات الجوال، فلا يصل الكمبيوتر. انتقل إلى شبكة Wi-Fi نفسها.",
+        "यह फ़ोन मोबाइल डेटा पर है, कंप्यूटर नहीं पहुँच सकता। उसी Wi-Fi पर जाएँ।",
+        "Ponsel ini memakai data seluler, komputer tidak bisa menjangkaunya. Pindah ke Wi-Fi yang sama.",
+        "Điện thoại này đang dùng dữ liệu di động, máy tính không tới được. Hãy chuyển sang cùng Wi-Fi.",
+        "โทรศัพท์นี้ใช้เน็ตมือถือ คอมพิวเตอร์เข้าไม่ถึง ให้เปลี่ยนไปใช้ Wi-Fi เดียวกัน",
+        "Questo telefono è sui dati mobili e il computer non lo raggiunge. Passa alla stessa Wi-Fi.",
+        "Bu telefon mobil veride, bilgisayar ulaşamıyor. Aynı Wi-Fi'ye geç.",
+        "Deze telefoon gebruikt mobiele data, de computer kan hem niet bereiken. Ga naar hetzelfde wifi-netwerk.",
+        "Ten telefon jest na danych komórkowych i komputer go nie dosięga. Przełącz się na to samo Wi-Fi.",
+        "Цей телефон на мобільних даних, комп'ютер його не бачить. Перейдіть на той самий Wi-Fi."))
+    S("conn_cause_captive", row(
+        "This Wi-Fi still needs a login. Finish that login, then try again.",
+        "这个 Wi-Fi 还要登录。请先完成登录，再试一次。",
+        "這個 Wi-Fi 還要登入。請先完成登入，再試一次。",
+        "この Wi-Fi はまだログインが必要です。ログインしてからもう一度。",
+        "이 Wi-Fi는 아직 로그인이 필요합니다. 로그인한 뒤 다시 시도하세요.",
+        "Este Wi-Fi aún pide un inicio de sesión. Termínalo y vuelve a intentarlo.",
+        "Ce Wi-Fi demande encore une connexion. Terminez-la, puis réessayez.",
+        "Dieses WLAN verlangt noch eine Anmeldung. Schließ sie ab und versuch es erneut.",
+        "Este Wi-Fi ainda pede login. Conclua o login e tente de novo.",
+        "Эта сеть Wi-Fi ещё просит вход. Завершите вход и попробуйте снова.",
+        "شبكة Wi-Fi هذه ما زالت تطلب تسجيل الدخول. أكمله ثم أعد المحاولة.",
+        "इस Wi-Fi में अभी लॉगिन बाकी है। लॉगिन पूरा करके फिर कोशिश करें।",
+        "Wi-Fi ini masih minta login. Selesaikan login, lalu coba lagi.",
+        "Wi-Fi này vẫn cần đăng nhập. Hãy đăng nhập xong rồi thử lại.",
+        "Wi-Fi นี้ยังต้องเข้าสู่ระบบ ทำให้เสร็จแล้วลองอีกครั้ง",
+        "Questo Wi-Fi chiede ancora l'accesso. Completalo e riprova.",
+        "Bu Wi-Fi hâlâ oturum istiyor. Oturumu bitir, sonra yeniden dene.",
+        "Dit wifi-netwerk vraagt nog om een login. Rond die af en probeer opnieuw.",
+        "To Wi-Fi wciąż wymaga logowania. Dokończ logowanie i spróbuj ponownie.",
+        "Ця мережа Wi-Fi ще просить вхід. Завершіть його й спробуйте знову."))
+    S("conn_cause_nolan", row(
+        "This phone has no local address, so the computer cannot find it. Switch Wi-Fi and try again.",
+        "手机没有局域网地址，电脑找不到它。请换一个 Wi-Fi 再试。",
+        "手機沒有區域網路位址，電腦找不到它。請換一個 Wi-Fi 再試。",
+        "スマホにローカルアドレスがなく、パソコンが見つけられません。別の Wi-Fi でもう一度。",
+        "휴대폰에 로컬 주소가 없어 컴퓨터가 찾지 못합니다. 다른 Wi-Fi로 다시 시도하세요.",
+        "Este teléfono no tiene dirección local y el ordenador no lo encuentra. Cambia de Wi-Fi.",
+        "Ce téléphone n'a pas d'adresse locale, l'ordinateur ne le trouve pas. Changez de Wi-Fi.",
+        "Dieses Telefon hat keine lokale Adresse, der Computer findet es nicht. Wechsle das WLAN.",
+        "Este telefone não tem endereço local e o computador não o acha. Troque o Wi-Fi.",
+        "У телефона нет локального адреса, компьютер его не находит. Смените Wi-Fi.",
+        "ليس للهاتف عنوان محلي، فلا يجده الكمبيوتر. غيّر شبكة Wi-Fi.",
+        "इस फ़ोन का लोकल पता नहीं है, कंप्यूटर उसे नहीं ढूँढ पाता। Wi-Fi बदलें।",
+        "Ponsel ini tidak punya alamat lokal, komputer tidak menemukannya. Ganti Wi-Fi.",
+        "Điện thoại này không có địa chỉ cục bộ, máy tính không thấy. Hãy đổi Wi-Fi.",
+        "โทรศัพท์นี้ไม่มีที่อยู่ในเครือข่าย คอมพิวเตอร์หาไม่เจอ ให้เปลี่ยน Wi-Fi",
+        "Questo telefono non ha un indirizzo locale e il computer non lo trova. Cambia Wi-Fi.",
+        "Bu telefonun yerel adresi yok, bilgisayar onu bulamıyor. Wi-Fi'yi değiştir.",
+        "Deze telefoon heeft geen lokaal adres, de computer vindt hem niet. Wissel van wifi.",
+        "Ten telefon nie ma adresu lokalnego i komputer go nie znajduje. Zmień Wi-Fi.",
+        "У цього телефона немає локальної адреси, комп'ютер його не бачить. Змініть Wi-Fi."))
+    S("conn_cause_vpn", row(
+        "A VPN is on and can block the computer. Turn the VPN off, then try again.",
+        "手机开着 VPN，电脑会被挡住。请先关掉 VPN，再试一次。",
+        "手機開著 VPN，電腦會被擋住。請先關掉 VPN，再試一次。",
+        "VPN がオンで、パソコンが遮られます。VPN を切ってからもう一度。",
+        "VPN이 켜져 있어 컴퓨터가 막힐 수 있습니다. VPN을 끈 뒤 다시 시도하세요.",
+        "Hay una VPN activa y puede bloquear el ordenador. Desactívala y vuelve a intentarlo.",
+        "Un VPN est actif et peut bloquer l'ordinateur. Coupez-le, puis réessayez.",
+        "Ein VPN ist an und kann den Computer blockieren. Schalte es aus und versuch es erneut.",
+        "Uma VPN está ligada e pode bloquear o computador. Desligue-a e tente de novo.",
+        "Включён VPN, он может блокировать компьютер. Выключите VPN и попробуйте снова.",
+        "شبكة VPN قيد التشغيل وقد تحجب الكمبيوتر. أوقفها ثم أعد المحاولة.",
+        "VPN चालू है और कंप्यूटर को रोक सकता है। VPN बंद करके फिर कोशिश करें।",
+        "VPN menyala dan bisa menghalangi komputer. Matikan VPN, lalu coba lagi.",
+        "VPN đang bật và có thể chặn máy tính. Hãy tắt VPN rồi thử lại.",
+        "VPN เปิดอยู่และอาจบังคอมพิวเตอร์ ปิด VPN แล้วลองอีกครั้ง",
+        "Una VPN è attiva e può bloccare il computer. Disattivala e riprova.",
+        "VPN açık ve bilgisayarı engelleyebilir. VPN'i kapat, sonra yeniden dene.",
+        "Er staat een VPN aan die de computer kan blokkeren. Zet de VPN uit en probeer opnieuw.",
+        "VPN jest włączony i może blokować komputer. Wyłącz VPN i spróbuj ponownie.",
+        "Увімкнено VPN, і він може блокувати комп'ютер. Вимкніть VPN і спробуйте знову."))
+    S("conn_cause_server", row(
+        "This phone is not waiting for the computer. Close Cat Diao and open it again.",
+        "这台手机没在等电脑。请退出猫叼后重新打开。",
+        "這支手機沒在等電腦。請退出貓叼後重新打開。",
+        "このスマホはパソコンを待っていません。キャットディオを閉じて開き直してください。",
+        "이 휴대폰은 컴퓨터를 기다리지 않습니다. 캣댜오를 닫았다가 다시 여세요.",
+        "Este teléfono no está esperando al ordenador. Cierra Cat Diao y ábrelo de nuevo.",
+        "Ce téléphone n'attend pas l'ordinateur. Fermez Cat Diao et rouvrez-le.",
+        "Dieses Telefon wartet nicht auf den Computer. Schließ Cat Diao und öffne es erneut.",
+        "Este telefone não está esperando o computador. Feche o Cat Diao e abra de novo.",
+        "Телефон не ждёт компьютер. Закройте Кэт Дяо и откройте снова.",
+        "هذا الهاتف لا ينتظر الكمبيوتر. أغلق كات دياو ثم افتحه من جديد.",
+        "यह फ़ोन कंप्यूटर का इंतज़ार नहीं कर रहा। कैट डियाओ बंद करके फिर खोलें।",
+        "Ponsel ini tidak menunggu komputer. Tutup Cat Diao lalu buka lagi.",
+        "Điện thoại này không đang chờ máy tính. Hãy đóng Cat Diao rồi mở lại.",
+        "โทรศัพท์นี้ไม่ได้รอคอมพิวเตอร์ ปิดแคทเดียวแล้วเปิดใหม่",
+        "Questo telefono non sta aspettando il computer. Chiudi Cat Diao e riaprilo.",
+        "Bu telefon bilgisayarı beklemiyor. Cat Diao'yu kapatıp yeniden aç.",
+        "Deze telefoon wacht niet op de computer. Sluit Cat Diao en open het opnieuw.",
+        "Ten telefon nie czeka na komputer. Zamknij Cat Diao i otwórz ponownie.",
+        "Цей телефон не чекає на комп'ютер. Закрийте Кет Дяо й відкрийте знову."))
+    S("conn_cause_unreachable", row(
+        "The computer did not reach this phone. On the PC, ask the AI to start connecting.",
+        "电脑没有连到这台手机。请在电脑上让 AI 开始连接。",
+        "電腦沒有連到這支手機。請在電腦上讓 AI 開始連線。",
+        "パソコンがこのスマホに届きませんでした。パソコンで AI に接続を始めさせてください。",
+        "컴퓨터가 이 휴대폰에 닿지 않았습니다. 컴퓨터에서 AI에게 연결을 시작하게 하세요.",
+        "El ordenador no llegó a este teléfono. En el PC, pide a la IA que empiece a conectar.",
+        "L'ordinateur n'a pas atteint ce téléphone. Sur le PC, demandez à l'IA de commencer.",
+        "Der Computer hat dieses Telefon nicht erreicht. Bitte die KI am PC, die Verbindung zu starten.",
+        "O computador não alcançou este telefone. No PC, peça à IA para começar a conectar.",
+        "Компьютер не дошёл до этого телефона. На компьютере попросите ИИ начать подключение.",
+        "لم يصل الكمبيوتر إلى هذا الهاتف. على الكمبيوتر، اطلب من الذكاء الاصطناعي بدء الاتصال.",
+        "कंप्यूटर इस फ़ोन तक नहीं पहुँचा। कंप्यूटर पर AI से कनेक्शन शुरू करवाएँ।",
+        "Komputer tidak sampai ke ponsel ini. Di komputer, minta AI mulai menghubungkan.",
+        "Máy tính không tới được điện thoại này. Trên máy tính, hãy nhờ AI bắt đầu kết nối.",
+        "คอมพิวเตอร์ไม่ถึงโทรศัพท์นี้ บนคอมพิวเตอร์ ให้ AI เริ่มเชื่อมต่อ",
+        "Il computer non ha raggiunto questo telefono. Sul PC, chiedi all'IA di iniziare.",
+        "Bilgisayar bu telefona ulaşamadı. Bilgisayarda yapay zekâdan bağlamayı başlatmasını iste.",
+        "De computer bereikte deze telefoon niet. Vraag de AI op de pc om te beginnen met verbinden.",
+        "Komputer nie doszedł do tego telefonu. Na komputerze poproś AI, aby zaczęła łączenie.",
+        "Комп'ютер не дійшов до цього телефона. На комп'ютері попросіть ШІ почати з'єднання."))
+    S("conn_cause_timeout", row(
+        "Those 6 digits expired. On the computer, start the connection again.",
+        "这 6 位数字已过期。请在电脑上再连一次。",
+        "這 6 位數字已過期。請在電腦上再連一次。",
+        "この 6 桁は期限切れです。パソコンでもう一度接続してください。",
+        "그 6자리가 만료되었습니다. 컴퓨터에서 연결을 다시 시작하세요.",
+        "Esos 6 dígitos caducaron. En el ordenador, inicia la conexión otra vez.",
+        "Ces 6 chiffres ont expiré. Sur l'ordinateur, relancez la connexion.",
+        "Diese 6 Ziffern sind abgelaufen. Starte die Verbindung am Computer erneut.",
+        "Esses 6 dígitos expiraram. No computador, comece a conexão de novo.",
+        "Эти 6 цифр истекли. На компьютере начните подключение снова.",
+        "انتهت صلاحية هذه الأرقام الستة. على الكمبيوتر، ابدأ الاتصال مرة أخرى.",
+        "वे 6 अंक समाप्त हो गए। कंप्यूटर पर कनेक्शन फिर शुरू करें।",
+        "6 digit itu kedaluwarsa. Di komputer, mulai sambungan lagi.",
+        "6 số đó đã hết hạn. Trên máy tính, hãy kết nối lại.",
+        "เลข 6 หลักนั้นหมดอายุแล้ว บนคอมพิวเตอร์ให้เริ่มเชื่อมต่อใหม่",
+        "Quelle 6 cifre sono scadute. Sul computer, avvia di nuovo la connessione.",
+        "Bu 6 hanenin süresi doldu. Bilgisayarda bağlantıyı yeniden başlat.",
+        "Die 6 cijfers zijn verlopen. Start de verbinding op de computer opnieuw.",
+        "Te 6 cyfr wygasło. Na komputerze zacznij połączenie ponownie.",
+        "Ці 6 цифр застаріли. На комп'ютері почніть з'єднання знову."))
     S("conn_advanced", row(
-        "On the computer yourself:\nRun scripts\\%1$s\nIf it cannot find the phone, run scripts\\%1$s --address %2$s\nThe phone shows 6 digits. If they match the computer, tap Allow.",
-        "自己在电脑上操作时：\n运行 scripts\\%1$s\n找不到时运行 scripts\\%1$s --address %2$s\n手机上会出现 6 位数字。和电脑上的一样，再点允许。",
-        "自己在電腦上操作時：\n執行 scripts\\%1$s\n找不到時執行 scripts\\%1$s --address %2$s\n手機上會出現 6 位數字。和電腦上的一樣，再點允許。",
-        "パソコンで自分で操作する場合：\nscripts\\%1$s を実行\n見つからないときは scripts\\%1$s --address %2$s\nスマホに 6 桁が出ます。パソコンと同じなら許可します。",
-        "컴퓨터에서 직접 할 때:\nscripts\\%1$s 실행\n못 찾으면 scripts\\%1$s --address %2$s\n휴대폰에 6자리가 나옵니다. 컴퓨터와 같으면 허용하세요.",
-        "Si lo haces tú en el ordenador:\nEjecuta scripts\\%1$s\nSi no encuentra el teléfono, ejecuta scripts\\%1$s --address %2$s\nEl teléfono muestra 6 dígitos. Si coinciden, toca Permitir.",
-        "Si vous le faites sur l'ordinateur :\nLancez scripts\\%1$s\nS'il ne trouve pas le téléphone, lancez scripts\\%1$s --address %2$s\nLe téléphone affiche 6 chiffres. S'ils correspondent, touchez Autoriser.",
-        "Wenn du es selbst am Computer machst:\nFühre scripts\\%1$s aus\nWenn das Telefon fehlt: scripts\\%1$s --address %2$s\nDas Telefon zeigt 6 Ziffern. Stimmen sie, tippe auf Zulassen.",
-        "Se for você no computador:\nExecute scripts\\%1$s\nSe não achar o telefone, execute scripts\\%1$s --address %2$s\nO telefone mostra 6 dígitos. Se coincidirem, toque em Permitir.",
-        "Если делаете это на компьютере сами:\nВыполните scripts\\%1$s\nЕсли телефон не найден: scripts\\%1$s --address %2$s\nНа телефоне появятся 6 цифр. Если они совпали, нажмите «Разрешить».",
-        "إذا فعلت ذلك بنفسك على الكمبيوتر:\nشغّل scripts\\%1$s\nإذا لم يجد الهاتف، شغّل scripts\\%1$s --address %2$s\nيظهر على الهاتف 6 أرقام. إذا طابقت، انقر السماح.",
-        "कंप्यूटर पर खुद करें:\nscripts\\%1$s चलाएँ\nफ़ोन न मिले तो scripts\\%1$s --address %2$s\nफ़ोन पर 6 अंक आएँगे। मिलें तो अनुमति दें।",
-        "Jika Anda yang melakukannya di komputer:\nJalankan scripts\\%1$s\nJika ponsel tidak ketemu, jalankan scripts\\%1$s --address %2$s\nPonsel menampilkan 6 digit. Jika sama, ketuk Izinkan.",
-        "Nếu tự làm trên máy tính:\nChạy scripts\\%1$s\nNếu không thấy điện thoại, chạy scripts\\%1$s --address %2$s\nĐiện thoại hiện 6 số. Nếu khớp, chạm Cho phép.",
-        "ถ้าทำเองบนคอมพิวเตอร์:\nรัน scripts\\%1$s\nถ้าหาโทรศัพท์ไม่เจอ ให้รัน scripts\\%1$s --address %2$s\nโทรศัพท์จะแสดงเลข 6 หลัก ถ้าตรงกัน ให้แตะอนุญาต",
-        "Se lo fai tu sul computer:\nEsegui scripts\\%1$s\nSe non trova il telefono, esegui scripts\\%1$s --address %2$s\nIl telefono mostra 6 cifre. Se coincidono, tocca Consenti.",
-        "Bilgisayarda kendin yapacaksan:\nscripts\\%1$s çalıştır\nTelefonu bulamazsa scripts\\%1$s --address %2$s çalıştır\nTelefonda 6 hane çıkar. Aynıysa İzin ver'e dokun.",
-        "Als je het zelf op de computer doet:\nVoer scripts\\%1$s uit\nVindt hij de telefoon niet, voer dan scripts\\%1$s --address %2$s uit\nDe telefoon toont 6 cijfers. Komen ze overeen, tik op Toestaan.",
-        "Jeśli robisz to sam na komputerze:\nUruchom scripts\\%1$s\nJeśli nie znajdzie telefonu, uruchom scripts\\%1$s --address %2$s\nTelefon pokaże 6 cyfr. Jeśli się zgadzają, stuknij Zezwól.",
-        "Якщо робите це на комп'ютері самі:\nВиконайте scripts\\%1$s\nЯкщо телефон не знайдено: scripts\\%1$s --address %2$s\nНа телефоні з'являться 6 цифр. Якщо вони збігаються, торкніться «Дозволити»."))
+        "On the computer, run the line below. If it cannot find the phone, run the line that includes the address.",
+        "在电脑上运行下面这一行。找不到手机时，运行带地址的那一行。",
+        "在電腦上執行下面這一行。找不到手機時，執行帶位址的那一行。",
+        "パソコンで下の行を実行してください。スマホが見つからないときは、アドレス付きの行を実行します。",
+        "컴퓨터에서 아래 줄을 실행하세요. 휴대폰을 못 찾으면 주소가 있는 줄을 실행하세요.",
+        "En el ordenador, ejecuta la línea de abajo. Si no encuentra el teléfono, ejecuta la línea que incluye la dirección.",
+        "Sur l'ordinateur, lancez la ligne ci-dessous. S'il ne trouve pas le téléphone, lancez la ligne qui contient l'adresse.",
+        "Führe am Computer die Zeile unten aus. Wenn das Telefon fehlt, nimm die Zeile mit der Adresse.",
+        "No computador, execute a linha abaixo. Se não achar o telefone, execute a linha que inclui o endereço.",
+        "На компьютере выполните строку ниже. Если телефон не найден, выполните строку с адресом.",
+        "على الكمبيوتر، شغّل السطر أدناه. إذا لم يجد الهاتف، شغّل السطر الذي يتضمن العنوان.",
+        "कंप्यूटर पर नीचे की पंक्ति चलाएँ। फ़ोन न मिले तो पते वाली पंक्ति चलाएँ।",
+        "Di komputer, jalankan baris di bawah. Jika ponsel tidak ketemu, jalankan baris yang memuat alamat.",
+        "Trên máy tính, hãy chạy dòng bên dưới. Nếu không thấy điện thoại, hãy chạy dòng có địa chỉ.",
+        "บนคอมพิวเตอร์ ให้รันบรรทัดด้านล่าง ถ้าหาโทรศัพท์ไม่เจอ ให้รันบรรทัดที่มีที่อยู่",
+        "Sul computer, esegui la riga sotto. Se non trova il telefono, esegui la riga con l'indirizzo.",
+        "Bilgisayarda aşağıdaki satırı çalıştır. Telefonu bulamazsa, adresi içeren satırı çalıştır.",
+        "Voer op de computer de regel hieronder uit. Vindt hij de telefoon niet, voer dan de regel met het adres uit.",
+        "Na komputerze uruchom wiersz poniżej. Jeśli nie znajdzie telefonu, uruchom wiersz z adresem.",
+        "На комп'ютері виконайте рядок нижче. Якщо телефон не знайдено, виконайте рядок з адресою."))
     S("conn_addr_placeholder", row(
         "http://PHONE-IP:8767", "http://手机IP:8767", "http://手機IP:8767", "http://スマホのIP:8767", "http://휴대폰IP:8767",
         "http://IP-DEL-TELEFONO:8767", "http://IP-DU-TELEPHONE:8767", "http://TELEFON-IP:8767", "http://IP-DO-TELEFONE:8767", "http://IP-ТЕЛЕФОНА:8767",

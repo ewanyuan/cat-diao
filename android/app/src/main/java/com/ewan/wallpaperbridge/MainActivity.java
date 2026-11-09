@@ -69,6 +69,8 @@ public class MainActivity extends CatDiaoActivity {
     private Button connectionRetry;
     private Button connectionBluetooth;
     private Button revokeButton;
+    private Button captureButton;
+    private Button connectPrimary;
     private LinearLayout controlPanel;
     private TextView controlStatus;
     private LinearLayout recentPanel;
@@ -237,11 +239,17 @@ public class MainActivity extends CatDiaoActivity {
         computerStatus = label("", 13, MUTED, false);
         computerStatus.setPadding(0, dp(10), 0, dp(2));
         hero.addView(computerStatus);
-        Button capture = button(getString(R.string.home_capture), true);
+        connectPrimary = button(getString(R.string.home_connect_link), true);
+        connectPrimary.setVisibility(View.GONE);
+        LinearLayout.LayoutParams connectLayout = new LinearLayout.LayoutParams(-1, -2);
+        connectLayout.topMargin = dp(15);
+        hero.addView(connectPrimary, connectLayout);
+        connectPrimary.setOnClickListener(v -> openConnection());
+        captureButton = button(getString(R.string.home_capture), true);
         LinearLayout.LayoutParams captureLayout = new LinearLayout.LayoutParams(-1, -2);
-        captureLayout.topMargin = dp(15);
-        hero.addView(capture, captureLayout);
-        capture.setOnClickListener(v -> startActivity(new Intent(this, CaptureActivity.class)
+        captureLayout.topMargin = dp(10);
+        hero.addView(captureButton, captureLayout);
+        captureButton.setOnClickListener(v -> startActivity(new Intent(this, CaptureActivity.class)
                 .setAction(CaptureActivity.ACTION_CLIPBOARD)));
 
         connectionPanel = panel(PAPER, BORDER);
@@ -298,6 +306,7 @@ public class MainActivity extends CatDiaoActivity {
     private void refreshHome() {
         String trusted = BridgeService.trustedName(this);
         int pending = 0;
+        boolean savesReadable = true;
         try (CaptureStore store = new CaptureStore(this)) {
             int total = store.totalCount();
             pending = store.pendingCount();
@@ -314,6 +323,7 @@ public class MainActivity extends CatDiaoActivity {
             }
             renderRecent(store.recent(3));
         } catch (Exception error) {
+            savesReadable = false;
             summary.setText(R.string.home_read_error);
             summaryDetail.setText(R.string.home_read_error_body);
             recentPanel.setVisibility(View.GONE);
@@ -324,24 +334,35 @@ public class MainActivity extends CatDiaoActivity {
         boolean checking = check.phase == ComputerConnection.Phase.CHECKING && BridgeService.isRunning();
         boolean bluetoothOnly = BridgeService.bluetoothOnline() && !BridgeService.wifiOnline(this);
         revokeButton.setVisibility(trusted.isEmpty() ? View.GONE : View.VISIBLE);
-        connectionRetry.setVisibility(trusted.isEmpty() || online ? View.GONE : View.VISIBLE);
+        if (trusted.isEmpty()) {
+            if (savesReadable) {
+                summary.setText(R.string.home_value_line);
+                summaryDetail.setTextColor(MUTED);
+                summaryDetail.setText(pending > 0 ? R.string.home_pending_body : R.string.status_unpaired);
+            }
+            computerStatus.setVisibility(View.GONE);
+            connectionPanel.setVisibility(View.GONE);
+            connectPrimary.setVisibility(View.VISIBLE);
+            connectPrimary.setText(BridgeService.pendingPair() != null
+                    ? R.string.conn_pairing_title : R.string.home_connect_link);
+            styleButton(connectPrimary, true);
+            styleButton(captureButton, false);
+            controlPanel.setVisibility(View.GONE);
+            showPairRequest();
+            return;
+        }
+        summaryDetail.setTextColor(CORAL_DARK);
+        connectPrimary.setVisibility(View.GONE);
+        styleButton(captureButton, true);
+        computerStatus.setVisibility(View.VISIBLE);
+        connectionRetry.setVisibility(online ? View.GONE : View.VISIBLE);
         connectionRetry.setEnabled(!checking);
         connectionRetry.setText(checking ? R.string.home_searching : R.string.home_retry);
         connectionBluetooth.setVisibility(!trusted.isEmpty() && !online ? View.VISIBLE : View.GONE);
         computerStatus.setText(computerConnectionText(trusted));
-        computerStatus.setTextColor(trusted.isEmpty() ? MUTED : online ? MINT : CORAL_DARK);
+        computerStatus.setTextColor(online ? MINT : CORAL_DARK);
         computerStatus.setVisibility(View.VISIBLE);
-        if (trusted.isEmpty()) {
-            PairingGate.Request pendingPair = BridgeService.pendingPair();
-            if (pendingPair != null) {
-                connectionTitle.setText(R.string.home_pair_title);
-                connectionSteps.setText(R.string.home_pair_body);
-            } else {
-                connectionTitle.setText(R.string.home_setup_title);
-                connectionSteps.setText(getString(R.string.home_setup_body, FirstConnection.PC_COMMAND));
-            }
-            connectionPanel.setVisibility(View.VISIBLE);
-        } else if (!online) {
+        if (!online) {
             if (checking) {
                 long seconds = (check.remainingMs() + 999) / 1000;
                 connectionTitle.setText(getString(R.string.home_finding_title, seconds));
@@ -654,6 +675,7 @@ public class MainActivity extends CatDiaoActivity {
                 .setNegativeButton(R.string.action_cancel, null)
                 .setPositiveButton(R.string.action_remove, (dialog, which) -> {
                     BridgeService.revoke(this);
+                    ConnectionActivity.clearProgress(this);
                     refreshHome();
                 }).show();
     }
@@ -905,13 +927,23 @@ public class MainActivity extends CatDiaoActivity {
         button.setAllCaps(false);
         button.setTextSize(15);
         button.setSingleLine(false);
-        button.setMaxLines(2);
+        button.setMaxLines(3);
+        button.setEllipsize(null);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
         button.setMinHeight(dp(48));
-        button.setTextColor(primary ? Color.WHITE : CORAL_DARK);
+        button.setMinimumHeight(dp(48));
+        button.setPaddingRelative(dp(16), dp(10), dp(16), dp(10));
+        button.setGravity(Gravity.CENTER);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        button.setBackground(round(primary ? CORAL : CREAM, primary ? CORAL : BORDER, 14));
         button.setElevation(0);
+        styleButton(button, primary);
         return button;
+    }
+
+    private void styleButton(Button button, boolean primary) {
+        button.setTextColor(primary ? Color.WHITE : CORAL_DARK);
+        button.setBackground(round(primary ? CORAL : CREAM, primary ? CORAL : BORDER, 14));
     }
 
     private GradientDrawable round(int fill, int stroke, int radius) {

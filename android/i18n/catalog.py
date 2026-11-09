@@ -197,8 +197,8 @@ S("home_bluetooth", row(
 "استخدم البلوتوث","ब्लूटूथ इस्तेमाल करें","Pakai Bluetooth","Dùng Bluetooth","ใช้บลูทูธ","Usa Bluetooth","Bluetooth kullan","Via Bluetooth","Użyj Bluetooth","Через Bluetooth"))
 
 S("home_connect_link", row(
-"Connect","开始连接","開始連線","接続する","연결하기","Conectar","Connecter","Verbinden","Conectar","Подключить",
-"اتصال","कनेक्ट करें","Hubungkan","Kết nối","เชื่อมต่อ","Connetti","Bağlan","Verbinden","Połącz","Підключити"))
+"Connect computer","连接电脑","連線電腦","パソコンにつなぐ","컴퓨터 연결","Conectar el ordenador","Connecter l'ordinateur","Computer verbinden","Conectar o computador","Подключить компьютер",
+"صِل الكمبيوتر","कंप्यूटर जोड़ें","Hubungkan komputer","Kết nối máy tính","เชื่อมต่อคอมพิวเตอร์","Collega il computer","Bilgisayarı bağla","Computer verbinden","Połącz komputer","Підключити комп'ютер"))
 
 S("home_revoke", row(
 "Remove computer","移除小窝连接","移除電腦連線","パソコンを解除","컴퓨터 연결 제거","Quitar ordenador","Retirer l'ordinateur","Computer entfernen","Remover computador","Удалить компьютер",
@@ -378,31 +378,27 @@ S("home_pair_body", row(
 "Stuknij, aby sprawdzić 6 cyfr.",
 "Торкніться, щоб звірити 6 цифр."))
 
-S("home_setup_title", row(
-"Connect your computer","把电脑连成你的小窝","把電腦連成你的小窩","パソコンを接続","컴퓨터를 연결하세요","Conecta tu ordenador","Connectez votre ordinateur","Computer verbinden","Conecte seu computador","Подключите компьютер",
-"صِل الكمبيوتر","अपना कंप्यूटर जोड़ें","Hubungkan komputer Anda","Kết nối máy tính","เชื่อมต่อคอมพิวเตอร์","Collega il computer","Bilgisayarını bağla","Verbind je computer","Połącz komputer","Підключіть комп'ютер"))
-
-S("home_setup_body", row(
-"Tap here. On the computer, run %1$s.",
-"点这里，一步一步连。电脑上运行 %1$s。",
-"點這裡，一步一步連。電腦上執行 %1$s。",
-"ここをタップ。パソコンでは %1$s を実行します。",
-"여기를 누르세요. 컴퓨터에서는 %1$s 를 실행합니다.",
-"Toca aquí. En el ordenador, ejecuta %1$s.",
-"Touchez ici. Sur l'ordinateur, lancez %1$s.",
-"Tippe hier. Auf dem Computer: %1$s.",
-"Toque aqui. No computador, execute %1$s.",
-"Нажмите здесь. На компьютере выполните %1$s.",
-"انقر هنا. على الكمبيوتر شغّل %1$s.",
-"यहाँ टैप करें। कंप्यूटर पर %1$s चलाएँ।",
-"Ketuk di sini. Di komputer, jalankan %1$s.",
-"Chạm vào đây. Trên máy tính, chạy %1$s.",
-"แตะที่นี่ บนคอมพิวเตอร์ให้รัน %1$s",
-"Tocca qui. Sul computer esegui %1$s.",
-"Buraya dokun. Bilgisayarda %1$s çalıştır.",
-"Tik hier. Op de computer: %1$s.",
-"Stuknij tutaj. Na komputerze uruchom %1$s.",
-"Торкніться тут. На комп'ютері виконайте %1$s."))
+S("home_value_line", row(
+"Text you copy on the phone is ready on the computer.",
+"手机上复制的东西，电脑上直接能用。",
+"手機上複製的東西，電腦上直接能用。",
+"スマホでコピーしたものが、パソコンですぐ使えます。",
+"휴대폰에서 복사한 내용이 컴퓨터에서 바로 쓰입니다.",
+"Lo que copias en el teléfono queda listo en el ordenador.",
+"Ce que vous copiez sur le téléphone est prêt sur l'ordinateur.",
+"Kopierter Text vom Telefon ist am Computer sofort da.",
+"O que você copia no telefone fica pronto no computador.",
+"Скопированное на телефоне сразу доступно на компьютере.",
+"ما تنسخه على الهاتف يصبح جاهزًا على الكمبيوتر.",
+"फ़ोन पर कॉपी की चीज़ कंप्यूटर पर तुरंत मिलती है।",
+"Teks yang disalin di ponsel langsung siap di komputer.",
+"Chữ bạn chép trên điện thoại dùng được ngay trên máy tính.",
+"สิ่งที่คัดลอกบนโทรศัพท์ ใช้บนคอมพิวเตอร์ได้เลย",
+"Ciò che copi sul telefono è subito pronto sul computer.",
+"Telefonda kopyaladığın şey bilgisayarda hemen hazır.",
+"Wat je op de telefoon kopieert, staat meteen op de computer.",
+"To, co skopiujesz w telefonie, jest od razu na komputerze.",
+"Скопійоване на телефоні одразу доступне на комп'ютері."))
 
 S("home_finding_title", row(
 "Looking · %1$d s","正在找小窝 · %1$d 秒","正在找電腦 · %1$d 秒","検索中 · %1$d 秒","찾는 중 · %1$d초","Buscando · %1$d s","Recherche · %1$d s","Suche · %1$d s","Procurando · %1$d s","Поиск · %1$d с",
@@ -1038,7 +1034,10 @@ def emit():
 
 
 def xml_text(value):
-    return (value.replace("&", "&amp;")
+    # Double real backslashes first. Android eats a single \ before % or a letter,
+    # which turned scripts\run.ps1 into scriptsrun.ps1.
+    return (value.replace("\\", "\\\\")
+            .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("'", "\\'")

@@ -45,6 +45,8 @@ BUTTON_KEYS = {
     "menu_language", "menu_send", "menu_overlay_off", "menu_overlay_on", "menu_connection",
     "menu_guide", "menu_bluetooth", "panel_dismiss", "panel_disable", "notif_hide_cat",
     "conn_start", "conn_copy", "conn_allow", "conn_deny", "conn_done", "conn_retry",
+    "conn_close", "conn_back", "conn_show_qr", "conn_hide_qr", "conn_recheck", "conn_try",
+    "conn_copy_command", "home_connect_link",
     "onb_skip", "onb_back", "onb_next", "onb_start", "home_retry", "home_capture",
     "capture_save", "pause_remote", "resume_remote",
 }
@@ -117,15 +119,23 @@ class StringResourcesTest(unittest.TestCase):
             for key in BUTTON_KEYS:
                 self.assertLessEqual(len(strings[key]), 48, f"{folder}:{key}={strings[key]}")
             for key in ("conn_not_paired_body", "conn_waiting_body", "conn_pairing_body"):
-                self.assertLessEqual(len(strings[key]), 120, f"{folder}:{key}")
+                self.assertLessEqual(len(strings[key]), 160, f"{folder}:{key}")
         zh = self.packs["values-zh-rCN"][0]
-        self.assertLess(len(zh["conn_not_paired_body"]), 40)
+        self.assertLess(len(zh["conn_not_paired_body"]), 80)
+        self.assertIn("GitHub", zh["conn_not_paired_body"])
+        self.assertIn("Python 3", zh["conn_not_paired_body"])
+        self.assertIn("Wi-Fi", zh["conn_not_paired_body"])
         self.assertIn("允许受限设置", zh["perm_restricted_body"])
         self.assertIn("右上角", zh["perm_restricted_body"])
         self.assertEqual(zh["pause_remote"], "暂停遥控")
-        self.assertIn("任选一种", zh["conn_waiting_body"])
-        self.assertIn("允许", zh["conn_advanced"])
-        self.assertIn("%1$s", zh["conn_advanced"])
+        self.assertIn("正在等待电脑连接", zh["conn_waiting_title"])
+        self.assertIn("%1$d", zh["conn_waiting_body"])
+        self.assertNotIn("任选一种", zh["conn_waiting_body"])
+        self.assertEqual(zh["home_value_line"], "手机上复制的东西，电脑上直接能用。")
+        self.assertEqual(zh["home_connect_link"], "连接电脑")
+        self.assertEqual(zh["conn_close"], "退出引导")
+        self.assertNotIn("%", zh["conn_advanced"])
+        self.assertNotIn("scriptsrun", zh["conn_advanced"])
         self.assertNotEqual(self.packs["values-zh-rCN"][0]["app_name"],
                             self.packs["values-zh-rTW"][0]["app_name"])
         arabic = self.packs["values-ar"][0]["home_empty_body"]
@@ -148,6 +158,21 @@ class StringResourcesTest(unittest.TestCase):
             if tag not in ordered:
                 ordered.append(tag)
         self.assertEqual(names, ordered[:20])
+
+    def test_android_string_escapes_keep_backslashes(self):
+        """aapt drops a lone backslash, which turned scripts\\run.ps1 into scriptsrun.ps1."""
+        legal = set("\\nt'\"u")
+        for folder, (strings, _) in self.packs.items():
+            for key, value in strings.items():
+                index = 0
+                while index < len(value):
+                    if value[index] != "\\":
+                        index += 1
+                        continue
+                    self.assertLess(index + 1, len(value), f"dangling slash {folder}:{key}")
+                    nxt = value[index + 1]
+                    self.assertIn(nxt, legal, f"{folder}:{key} bad escape \\{nxt}")
+                    index += 6 if nxt == "u" else 2
 
     def test_connection_keys_exist(self):
         source = (JAVA / "com/ewan/wallpaperbridge/FirstConnection.java").read_text(encoding="utf-8")
