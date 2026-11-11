@@ -121,10 +121,37 @@ class StringResourcesTest(unittest.TestCase):
             for key in ("conn_not_paired_body", "conn_waiting_body", "conn_pairing_body"):
                 self.assertLessEqual(len(strings[key]), 160, f"{folder}:{key}")
         zh = self.packs["values-zh-rCN"][0]
+        en = self.packs["values"][0]
+        repo = "https://github.com/ewanyuan/cat-diao"
         self.assertLess(len(zh["conn_not_paired_body"]), 80)
-        self.assertIn("GitHub", zh["conn_not_paired_body"])
-        self.assertIn("Python 3", zh["conn_not_paired_body"])
         self.assertIn("Wi-Fi", zh["conn_not_paired_body"])
+        self.assertIn("这句话", zh["conn_not_paired_body"])
+        self.assertLess(zh["conn_not_paired_body"].index("Wi-Fi"), zh["conn_not_paired_body"].index("这句话"))
+        self.assertNotIn("GitHub", zh["conn_not_paired_body"])
+        self.assertNotIn("Python", zh["conn_not_paired_body"])
+        self.assertIn("same Wi-Fi", en["conn_not_paired_body"])
+        self.assertIn("sentence below", en["conn_not_paired_body"])
+        self.assertIn("only after", en["conn_code_pending"])
+        self.assertIn("just copied", en["conn_waiting_body"])
+        self.assertIn("用猫叼连上我这台手机", zh["conn_ai_line"])
+        self.assertIn("这句话已复制", zh["conn_sentence_copied"])
+        self.assertIn("电脑连上后", zh["conn_code_pending"])
+        self.assertIn("才会", zh["conn_code_pending"])
+        self.assertIn("这句话", zh["conn_waiting_body"])
+        for folder, (strings, _) in self.packs.items():
+            body = strings["conn_not_paired_body"]
+            self.assertNotIn("GitHub", body, folder)
+            self.assertNotIn("github.com", body, folder)
+            self.assertNotIn("Python", body, folder)
+            self.assertNotIn("run.ps1", strings["conn_ai_line"], folder)
+            self.assertNotIn("%", strings["conn_ai_line"], folder)
+            self.assertIn(repo, strings["conn_ai_line"], folder)
+            self.assertIn("Python 3", strings["conn_ai_line"], folder)
+            addressed = strings["conn_ai_line_with_address"]
+            self.assertIn(repo, addressed, folder)
+            self.assertIn("Python 3", addressed, folder)
+            self.assertIn("%1$s", addressed, folder)
+            self.assertNotIn("run.ps1", addressed, folder)
         self.assertIn("允许受限设置", zh["perm_restricted_body"])
         self.assertIn("右上角", zh["perm_restricted_body"])
         self.assertEqual(zh["pause_remote"], "暂停遥控")

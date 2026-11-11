@@ -164,7 +164,7 @@ public final class FirstConnection {
         }
     }
 
-    /** One short sentence an AI can act on. Embeds the phone URL when known. */
+    /** Paste for the computer's AI. The strings include the repo and Python 3; the phone URL is added when known. */
     public static String aiLine(Copy copy, String address) {
         if (address != null && address.startsWith("http://"))
             return copy.f("conn_ai_line_with_address", address);
@@ -207,8 +207,10 @@ public final class FirstConnection {
         int seconds = (int) Math.min(Integer.MAX_VALUE, facts.waitedMs / 1000L);
         return screen(State.WAITING, copy.t("conn_waiting_title"),
                 copy.f("conn_waiting_body", seconds),
-                "", "", "", "",
-                "", facts.address, false, false, "", "", "", false, copy.t("conn_code_pending"));
+                "", "",
+                copy.t("conn_copy"), "copy",
+                aiLine(copy, facts.address), facts.address, false, false, "", "", "",
+                false, copy.t("conn_code_pending"));
     }
 
     private static Screen pairing(Copy copy, String code) {

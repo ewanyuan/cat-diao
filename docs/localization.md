@@ -16,7 +16,7 @@ Arabic sets layout direction to RTL (`android:supportsRtl="true"`). Rows use sta
 
 ## What stays untranslated
 
-Protocol fields and machine values stay fixed: `/hello` `name` is `猫叼`, the download folder payload is `下载/猫叼`, the Bluetooth service name is `猫叼小窝`, capture `source` values stored for the computer stay the existing Chinese tokens (the phone translates them only when showing the list), and commands such as `run.ps1 pair` stay out of the first-run sentence. A backslash in a string resource must be written as `\\`; `catalog.py` does that. A single `\` is dropped by Android, which used to show `scriptsrun.ps1`. Developer docs are not fully translated.
+Protocol fields and machine values stay fixed: `/hello` `name` is `猫叼`, the download folder payload is `下载/猫叼`, the Bluetooth service name is `猫叼小窝`, capture `source` values stored for the computer stay the existing Chinese tokens (the phone translates them only when showing the list). The first-run instruction says to use the same Wi-Fi, then send the sentence in the card. That copied sentence includes `https://github.com/ewanyuan/cat-diao` and Python 3; the instruction above the card does not. Commands such as `run.ps1 pair` stay out of both. A backslash in a string resource must be written as `\\`; `catalog.py` does that. A single `\` is dropped by Android, which used to show `scriptsrun.ps1`. Developer docs are not fully translated.
 
 ## Add a locale
 

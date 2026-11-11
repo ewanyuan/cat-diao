@@ -28,7 +28,7 @@ Codex 会把仓库中的 [`cat-diao/`](cat-diao/) 放到当前用户的技能目
 
 2.0 是新的应用包名，安装包需要主人在本机用新钥匙签名后才能装，仓库里不附带 2.0 APK，也不附带钥匙。新签名不能覆盖旧猫叼，发布前要主人同意做一次卸载或先强制停止旧应用。旧应用里还没送出的收藏不会跟着过去，电脑上的台账还在。两边不要同时运行。
 
-手机与电脑连到同一个 Wi-Fi 后，在手机首页点「连接电脑」。把那一句短话或二维码截图发给电脑上的 AI 即可（电脑需要 Python 3，AI 从 GitHub 安装猫叼；二维码就是手机地址）。也可以在连不上之后的帮助里自己运行 `scripts/run.ps1 pair`。有地址时 AI 用 `--address` 直连；没有地址时猫叼会自己找手机。手机和电脑会各显示同一个 6 位数字，一致后再点「允许」。收藏不需要额外权限；看画面、点画面需要屏幕控制。安卓 13 及以上请先在应用信息里允许受限设置。猫叼用来做看画面、点画面的真机验证，不替代 ADB。内容在局域网上是明文，请只用信任的 Wi-Fi。步骤见 [`docs/first-connection.md`](docs/first-connection.md)。
+先让手机和电脑连同一个 Wi-Fi，再在手机首页点「连接电脑」。把卡片里的那句话发给电脑上的 AI。这句话写明从 `https://github.com/ewanyuan/cat-diao` 安装，并写了需要 Python 3；二维码只是手机地址。复制之后，6 位数字要等电脑连上才出现。也可以在连不上之后的帮助里自己运行 `scripts/run.ps1 pair`。有手机地址时 AI 用 `--address` 直连；没有手机地址时猫叼会自己找手机。手机和电脑会各显示同一个 6 位数字，一致后再点「允许」。收藏不需要额外权限；看画面、点画面需要屏幕控制。安卓 13 及以上请先在应用信息里允许受限设置。猫叼用来做看画面、点画面的真机验证，不替代 ADB。内容在局域网上是明文，请只用信任的 Wi-Fi。步骤见 [`docs/first-connection.md`](docs/first-connection.md)。
 
 **换了 Wi-Fi 后：**只要电脑端「猫叼接收」和手机猫叼仍在运行，电脑会在后台每 10 秒查找已配对手机；两台设备恢复到可互访的同一 Wi-Fi 后，会自动更新连接地址并补送收藏。打开手机首页或点「重新检查」会发起一次真实连接检查，最多 10 秒就显示成功或未连接；后台继续重试时会保留本次结果，不会一直显示「正在重连」。若一直离线，再让电脑上的 AI 工具（如 Codex）说“重新连接猫叼”；必要时从手机「连接电脑」的帮助里复制地址。2.0 的手机和电脑要一起更新。断线后会自动重试，间隔从大约 10 秒增加到最多 60 秒。
 
@@ -66,7 +66,7 @@ Codex should place [`cat-diao/`](cat-diao/) in the current user's skills directo
 
 Version 2.0 uses a new application id. The owner signs that build with a new key that is never stored in this repository, so the repository does not ship a 2.0 APK. The new signature cannot replace the old debug-signed app. Do not publish a release until the owner agrees to uninstall or force-stop the old app once. Pending saves on the phone do not move; the computer ledger stays. Do not run both apps at once.
 
-Connect the phone and PC to the same Wi-Fi, then tap Connect computer on the phone. Send the one-line prompt or the QR code to the AI on the PC (the PC needs Python 3; the AI installs Cat Diao from GitHub). Pairing shows the same 6-digit code on the phone and on the PC; approve only when they match. Saving needs no extra permission. Seeing and tapping the screen is real-device checking and does not replace ADB. Traffic on the LAN is plaintext.
+Put the phone and the computer on the same Wi-Fi, then tap Connect computer. Send the sentence in the card to the AI on the computer. That sentence names `https://github.com/ewanyuan/cat-diao` and says Python 3 is required. The QR code is only the phone address. The 6-digit code appears after the computer connects; approve only when it matches the computer. Saving needs no extra permission. Seeing and tapping the screen is real-device checking and does not replace ADB. Traffic on the LAN is plaintext.
 
 **After changing Wi-Fi:** while the PC receiver and phone service are running, the PC searches for the paired phone every 10 seconds. When both devices return to a Wi-Fi network where they can reach each other, the address is refreshed and pending saves are sent automatically. Opening the phone home page or tapping “重新检查” starts a real receiver check that finishes within 10 seconds. Background retries keep the completed result visible instead of showing an endless reconnect message. Version 2.0 retries from about 10 seconds up to 60 seconds, and the phone app and PC skill must both be 2.0. If it remains offline, ask your AI tool to “reconnect Cat Diao”; if needed, copy the current address from the phone’s first-connection screen and give it to the AI tool.
 
