@@ -147,9 +147,9 @@
     <string name="perm_title">Pil ve izinler</string>
     <string name="perm_open_app_info">Uygulama bilgisini aç</string>
     <string name="perm_setup_a11y">Ekran denetimini açıp geri dön. Kaydetmek için gerekmez.</string>
-    <string name="perm_setup_overlay">Cat Diao\'nun diğer uygulamaların üstünde görünmesine izin verip geri dön.</string>
+    <string name="perm_setup_overlay">Yüzen pencere gerekmez. Devam etmek için Atla\'ya dokun. Kediyi sonra Diğer\'den açabilirsin.</string>
     <string name="perm_setup_write">Cat Diao\'nun sistem ayarlarını değiştirmesine izin verip geri dön.</string>
-    <string name="perm_setup_title">Kuruluma devam (%1$d/3)</string>
+    <string name="perm_setup_title">Kuruluma devam (%1$d/2)</string>
     <string name="perm_toast_a11y">Ekran denetimini açıp geri dön</string>
     <string name="perm_toast_overlay">Yüzen pencereye izin verip geri dön</string>
     <string name="perm_toast_write">Sistem ayarlarına izin verip geri dön</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">Önce bu telefonu ve bilgisayarı aynı Wi-Fi\'ye al, sonra aşağıdaki cümleyi bilgisayardaki yapay zekâya gönder.</string>
     <string name="conn_start">Başla</string>
     <string name="conn_waiting_title">Bilgisayar bekleniyor…</string>
-    <string name="conn_waiting_body">Az önce kopyaladığın cümleyi bilgisayardaki yapay zekâya gönder. %1$d sn beklendi.</string>
+    <string name="conn_waiting_body">Bu sayfada kal. Ekran açık kalsın, uygulama değiştirme. 6 hane çıkınca İzin ver\'e dokun. %1$d sn beklendi.</string>
     <string name="conn_copy">Bu cümleyi kopyala</string>
     <string name="conn_still_stuck">Hâlâ bağlanmadı</string>
     <string name="conn_ai_line">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur (Python 3 gerekir).</string>
     <string name="conn_ai_paste_with_address">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur (Python 3 gerekir). Telefon adresi: %1$s</string>
     <string name="conn_pairing_title">Kodu kontrol et</string>
-    <string name="conn_pairing_body">Bilgisayarla aynıysa İzin ver\'e dokun. Değilse Reddet\'e dokun.</string>
+    <string name="conn_pairing_body">Bu sayfada kal, ekran açık kalsın, uygulama değiştirme. Aynıysa İzin ver. Değilse Reddet.</string>
     <string name="conn_allow">İzin ver</string>
     <string name="conn_deny">Reddet</string>
     <string name="conn_paired_title">✓ Bağlandı</string>

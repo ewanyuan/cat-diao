@@ -147,9 +147,9 @@
     <string name="perm_title">Pin và quyền</string>
     <string name="perm_open_app_info">Mở thông tin ứng dụng</string>
     <string name="perm_setup_a11y">Bật điều khiển màn hình rồi quay lại. Lưu không cần bước này.</string>
-    <string name="perm_setup_overlay">Cho phép Cat Diao hiện trên ứng dụng khác, rồi quay lại.</string>
+    <string name="perm_setup_overlay">Cửa sổ nổi không bắt buộc. Chạm Bỏ qua để tiếp tục. Mèo nổi có thể bật sau từ Thêm.</string>
     <string name="perm_setup_write">Cho phép Cat Diao đổi cài đặt hệ thống, rồi quay lại.</string>
-    <string name="perm_setup_title">Tiếp tục thiết lập (%1$d/3)</string>
+    <string name="perm_setup_title">Tiếp tục thiết lập (%1$d/2)</string>
     <string name="perm_toast_a11y">Bật điều khiển màn hình rồi quay lại</string>
     <string name="perm_toast_overlay">Cho phép cửa sổ nổi rồi quay lại</string>
     <string name="perm_toast_write">Cho phép đổi cài đặt hệ thống rồi quay lại</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">Hãy để điện thoại và máy tính cùng một Wi-Fi, rồi gửi câu bên dưới cho AI trên máy tính.</string>
     <string name="conn_start">Bắt đầu</string>
     <string name="conn_waiting_title">Đang chờ máy tính kết nối…</string>
-    <string name="conn_waiting_body">Gửi câu vừa chép cho AI trên máy tính. Đã chờ %1$d giây.</string>
+    <string name="conn_waiting_body">Hãy ở lại trang này. Giữ màn hình sáng, đừng chuyển ứng dụng, đến khi hiện 6 số thì chạm Cho phép. Đã chờ %1$d giây.</string>
     <string name="conn_copy">Chép câu này</string>
     <string name="conn_still_stuck">Vẫn chưa kết nối</string>
     <string name="conn_ai_line">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao (cần Python 3).</string>
     <string name="conn_ai_paste_with_address">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao (cần Python 3). Địa chỉ điện thoại: %1$s</string>
     <string name="conn_pairing_title">Đối chiếu mã</string>
-    <string name="conn_pairing_body">Nếu giống máy tính, chạm Cho phép. Nếu không, chạm Từ chối.</string>
+    <string name="conn_pairing_body">Hãy ở lại trang này, giữ màn hình sáng, đừng chuyển ứng dụng. Nếu giống, chạm Cho phép. Nếu không, chạm Từ chối.</string>
     <string name="conn_allow">Cho phép</string>
     <string name="conn_deny">Từ chối</string>
     <string name="conn_paired_title">✓ Đã kết nối</string>

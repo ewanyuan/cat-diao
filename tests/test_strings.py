@@ -132,7 +132,12 @@ class StringResourcesTest(unittest.TestCase):
         self.assertIn("same Wi-Fi", en["conn_not_paired_body"])
         self.assertIn("sentence below", en["conn_not_paired_body"])
         self.assertIn("only after", en["conn_code_pending"])
-        self.assertIn("just copied", en["conn_waiting_body"])
+        self.assertIn("Stay on this page", en["conn_waiting_body"])
+        self.assertIn("screen", en["conn_waiting_body"])
+        self.assertIn("Allow", en["conn_waiting_body"])
+        self.assertIn("Stay on this page", en["conn_pairing_body"])
+        self.assertIn("Allow", en["conn_pairing_body"])
+        self.assertIn("Deny", en["conn_pairing_body"])
         shown = "用猫叼连上我这台手机。请从 " + repo + " 安装。"
         pasted = "用猫叼连上我这台手机。请从 " + repo + " 安装（需要 Python 3）。"
         self.assertEqual(zh["conn_ai_line"], shown)
@@ -142,7 +147,14 @@ class StringResourcesTest(unittest.TestCase):
         self.assertIn("这句话已复制", zh["conn_sentence_copied"])
         self.assertIn("电脑连上后", zh["conn_code_pending"])
         self.assertIn("才会", zh["conn_code_pending"])
-        self.assertIn("这句话", zh["conn_waiting_body"])
+        self.assertIn("留在这一页", zh["conn_waiting_body"])
+        self.assertIn("亮屏", zh["conn_waiting_body"])
+        self.assertIn("允许", zh["conn_waiting_body"])
+        self.assertIn("留在这一页", zh["conn_pairing_body"])
+        self.assertIn("亮屏", zh["conn_pairing_body"])
+        self.assertIn("允许", zh["conn_pairing_body"])
+        self.assertIn("拒绝", zh["conn_pairing_body"])
+        self.assertIn("跳过", zh["perm_setup_overlay"])
         paste_keys = {"conn_ai_paste", "conn_ai_paste_with_address"}
         for folder, (strings, _) in self.packs.items():
             body = strings["conn_not_paired_body"]
@@ -174,6 +186,10 @@ class StringResourcesTest(unittest.TestCase):
         self.assertIn("正在等待电脑连接", zh["conn_waiting_title"])
         self.assertIn("%1$d", zh["conn_waiting_body"])
         self.assertNotIn("任选一种", zh["conn_waiting_body"])
+        for folder, (strings, _) in self.packs.items():
+            title = strings["perm_setup_title"]
+            self.assertIn("/2", title, folder)
+            self.assertNotIn("/3", title, folder)
         self.assertEqual(zh["home_value_line"], "手机上复制的东西，电脑上直接能用。")
         self.assertEqual(zh["home_connect_link"], "连接电脑")
         self.assertEqual(zh["conn_close"], "退出引导")

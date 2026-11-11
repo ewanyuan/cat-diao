@@ -147,9 +147,9 @@
     <string name="perm_title">権限と電池</string>
     <string name="perm_open_app_info">アプリ情報を開く</string>
     <string name="perm_setup_a11y">画面操作をオンにして戻ってください。保存には不要です。</string>
-    <string name="perm_setup_overlay">他のアプリの上に表示することを許可して戻ってください。</string>
+    <string name="perm_setup_overlay">フローティング表示は不要です。「スキップ」で続けられます。猫はあとで「その他」から出せます。</string>
     <string name="perm_setup_write">システム設定の変更を許可して戻ってください。</string>
-    <string name="perm_setup_title">設定を続ける（%1$d/3）</string>
+    <string name="perm_setup_title">設定を続ける（%1$d/2）</string>
     <string name="perm_toast_a11y">画面操作をオンにして戻ってください</string>
     <string name="perm_toast_overlay">フローティング表示を許可して戻ってください</string>
     <string name="perm_toast_write">システム設定の変更を許可して戻ってください</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">先にスマホとパソコンを同じ Wi-Fi につなぎ、下の文をパソコンの AI に送ってください。</string>
     <string name="conn_start">開始</string>
     <string name="conn_waiting_title">パソコンの接続を待っています…</string>
-    <string name="conn_waiting_body">コピーした文をパソコンの AI に送ってください。%1$d 秒待ちました。</string>
+    <string name="conn_waiting_body">この画面のまま、画面を点灯し、他のアプリに切り替えないで。6桁が出たら「許可」。%1$d 秒待ちました。</string>
     <string name="conn_copy">この文をコピー</string>
     <string name="conn_still_stuck">まだつながらない</string>
     <string name="conn_ai_line">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして。</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして（Python 3 が必要）。</string>
     <string name="conn_ai_paste_with_address">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして（Python 3 が必要）。スマホのアドレス：%1$s</string>
     <string name="conn_pairing_title">数字を照合</string>
-    <string name="conn_pairing_body">パソコンと同じなら許可、違えば拒否をタップします。</string>
+    <string name="conn_pairing_body">この画面のまま、画面を点灯し、他のアプリに切り替えないで。同じなら許可、違うなら拒否。</string>
     <string name="conn_allow">許可</string>
     <string name="conn_deny">拒否</string>
     <string name="conn_paired_title">✓ 接続しました</string>

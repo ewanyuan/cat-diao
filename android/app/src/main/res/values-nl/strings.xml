@@ -147,9 +147,9 @@
     <string name="perm_title">Batterij en rechten</string>
     <string name="perm_open_app_info">App-info openen</string>
     <string name="perm_setup_a11y">Zet schermbediening aan en kom terug. Opslaan heeft dit niet nodig.</string>
-    <string name="perm_setup_overlay">Sta toe dat Cat Diao boven andere apps verschijnt en kom terug.</string>
+    <string name="perm_setup_overlay">Het zwevende venster is optioneel. Tik op Overslaan om verder te gaan. De kat zet je later aan via Meer.</string>
     <string name="perm_setup_write">Sta Cat Diao toe systeeminstellingen te wijzigen en kom terug.</string>
-    <string name="perm_setup_title">Instellen vervolgen (%1$d/3)</string>
+    <string name="perm_setup_title">Instellen vervolgen (%1$d/2)</string>
     <string name="perm_toast_a11y">Zet schermbediening aan en kom terug</string>
     <string name="perm_toast_overlay">Sta het zwevende venster toe en kom terug</string>
     <string name="perm_toast_write">Sta systeeminstellingen toe en kom terug</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">Zet deze telefoon en de computer eerst op hetzelfde wifi-netwerk. Stuur daarna de zin hieronder naar de AI op de computer.</string>
     <string name="conn_start">Starten</string>
     <string name="conn_waiting_title">Wachten op de computer…</string>
-    <string name="conn_waiting_body">Stuur de zin die je net kopieerde naar de AI op de computer. %1$d s gewacht.</string>
+    <string name="conn_waiting_body">Blijf op deze pagina. Laat het scherm aan en wissel niet van app tot de 6 cijfers er zijn en je op Toestaan tikt. %1$d s gewacht.</string>
     <string name="conn_copy">Kopieer deze zin</string>
     <string name="conn_still_stuck">Nog steeds niet verbonden</string>
     <string name="conn_ai_line">Verbind Cat Diao met deze telefoon. Installeer het vanaf https://github.com/ewanyuan/cat-diao.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">Verbind Cat Diao met deze telefoon. Installeer het vanaf https://github.com/ewanyuan/cat-diao (Python 3 nodig).</string>
     <string name="conn_ai_paste_with_address">Verbind Cat Diao met deze telefoon. Installeer het vanaf https://github.com/ewanyuan/cat-diao (Python 3 nodig). Telefoonadres: %1$s</string>
     <string name="conn_pairing_title">Controleer de code</string>
-    <string name="conn_pairing_body">Komt het overeen met de computer, tik op Toestaan. Zo niet, tik op Weigeren.</string>
+    <string name="conn_pairing_body">Blijf op deze pagina, scherm aan, en wissel niet van app. Komt het overeen, tik op Toestaan. Zo niet, tik op Weigeren.</string>
     <string name="conn_allow">Toestaan</string>
     <string name="conn_deny">Weigeren</string>
     <string name="conn_paired_title">✓ Verbonden</string>

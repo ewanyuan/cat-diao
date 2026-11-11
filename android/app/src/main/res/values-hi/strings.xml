@@ -147,9 +147,9 @@
     <string name="perm_title">बैटरी और अनुमति</string>
     <string name="perm_open_app_info">ऐप जानकारी खोलें</string>
     <string name="perm_setup_a11y">स्क्रीन नियंत्रण चालू करके लौटें। सहेजने के लिए यह ज़रूरी नहीं।</string>
-    <string name="perm_setup_overlay">अन्य ऐप के ऊपर दिखने दें, फिर लौटें।</string>
+    <string name="perm_setup_overlay">फ़्लोटिंग विंडो ज़रूरी नहीं। जारी रखने के लिए छोड़ें दबाएँ। बिल्ली बाद में और से चालू कर सकते हैं।</string>
     <string name="perm_setup_write">सिस्टम सेटिंग बदलने दें, फिर लौटें।</string>
-    <string name="perm_setup_title">सेटअप जारी रखें (%1$d/3)</string>
+    <string name="perm_setup_title">सेटअप जारी रखें (%1$d/2)</string>
     <string name="perm_toast_a11y">स्क्रीन नियंत्रण चालू करके लौटें</string>
     <string name="perm_toast_overlay">फ़्लोटिंग विंडो की अनुमति देकर लौटें</string>
     <string name="perm_toast_write">सिस्टम सेटिंग की अनुमति देकर लौटें</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">पहले फ़ोन और कंप्यूटर को एक ही Wi-Fi पर रखें, फिर नीचे का वाक्य कंप्यूटर की AI को भेजें।</string>
     <string name="conn_start">शुरू</string>
     <string name="conn_waiting_title">कंप्यूटर का इंतज़ार…</string>
-    <string name="conn_waiting_body">अभी कॉपी किया वाक्य कंप्यूटर की AI को भेजें। %1$d सेकंड हुए।</string>
+    <string name="conn_waiting_body">इसी पेज पर रहें। स्क्रीन जलाए रखें, ऐप न बदलें, 6 अंक आएँ तो अनुमति दें दबाएँ। %1$d सेकंड हुए।</string>
     <string name="conn_copy">यह वाक्य कॉपी करें</string>
     <string name="conn_still_stuck">अब भी नहीं जुड़ा</string>
     <string name="conn_ai_line">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो।</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो (Python 3 चाहिए)।</string>
     <string name="conn_ai_paste_with_address">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो (Python 3 चाहिए)। फ़ोन का पता: %1$s</string>
     <string name="conn_pairing_title">कोड जाँचें</string>
-    <string name="conn_pairing_body">कंप्यूटर से मेल खाए तो अनुमति दें। नहीं तो अस्वीकार करें।</string>
+    <string name="conn_pairing_body">इसी पेज पर रहें, स्क्रीन जलाए रखें, ऐप न बदलें। मेल खाए तो अनुमति दें। नहीं तो अस्वीकार करें।</string>
     <string name="conn_allow">अनुमति दें</string>
     <string name="conn_deny">अस्वीकार</string>
     <string name="conn_paired_title">✓ जुड़ गया</string>

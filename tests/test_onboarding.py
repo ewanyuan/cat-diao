@@ -159,6 +159,210 @@ class OnboardingChecks(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_poll_retries_timeout_and_refused_then_saves(self):
+        token = "poll-retry-token"
+        calls = {"fetch": 0}
+
+        def fetch(address, pair_id, deadline):
+            calls["fetch"] += 1
+            if calls["fetch"] == 1:
+                raise TimeoutError("timed out")
+            if calls["fetch"] == 2:
+                raise ConnectionRefusedError()
+            self.assertEqual(pair_id, "pair-1")
+            return "approved"
+
+        def prove(*args):
+            raise AssertionError("an approved status does not need a token probe")
+
+        previous = bridge.config_read()
+        try:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                bridge.await_pair_approval(
+                    "http://127.0.0.1:8767", "pair-1", token, "书房电脑",
+                    bridge.time.monotonic() + 5,
+                    fetch=fetch, prove=prove, sleep=lambda _seconds: None)
+            text = output.getvalue()
+            saved = bridge.config_read()
+            self.assertEqual(saved.get("token"), token)
+            self.assertEqual(saved.get("address"), "http://127.0.0.1:8767")
+            self.assertEqual(saved.get("name"), "书房电脑")
+            self.assertIn("手机已确认这台电脑", text)
+            self.assertNotIn(token, text)
+            self.assertGreaterEqual(calls["fetch"], 3)
+        finally:
+            bridge.config_save(previous)
+
+    def test_missing_status_still_saves_when_the_token_was_accepted(self):
+        token = "approved-dh-token"
+
+        def fetch(*args):
+            raise bridge.PairGone()
+
+        def prove(address, proved_token, deadline):
+            self.assertEqual(proved_token, token)
+            self.assertGreater(deadline, bridge.time.monotonic())
+            return True
+
+        previous = bridge.config_read()
+        try:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                bridge.await_pair_approval(
+                    "http://192.168.101.131:8767", "gone-id", token, "书房电脑",
+                    bridge.time.monotonic() + 5,
+                    fetch=fetch, prove=prove, sleep=lambda _seconds: None)
+            self.assertEqual(bridge.config_read().get("token"), token)
+            self.assertEqual(bridge.config_read().get("address"), "http://192.168.101.131:8767")
+            self.assertIn("手机已确认这台电脑", output.getvalue())
+            self.assertNotIn(token, output.getvalue())
+        finally:
+            bridge.config_save(previous)
+
+    def test_rejected_confirm_does_not_save_or_probe(self):
+        previous = bridge.config_read()
+
+        def fetch(*args):
+            return "rejected"
+
+        def prove(*args):
+            raise AssertionError("a refusal must not be recovered as approval")
+
+        try:
+            with self.assertRaises(RuntimeError) as caught:
+                bridge.await_pair_approval(
+                    "http://127.0.0.1:8767", "pair-1", "unused-token", "书房电脑",
+                    bridge.time.monotonic() + 5,
+                    fetch=fetch, prove=prove, sleep=lambda _seconds: None)
+            self.assertIn("未允许", str(caught.exception))
+            self.assertEqual(bridge.config_read().get("token"), previous.get("token"))
+        finally:
+            bridge.config_save(previous)
+
+    def test_status_blips_until_the_window_ends_are_not_an_immediate_abort(self):
+        previous = bridge.config_read()
+        probes = {"n": 0}
+
+        def fetch(*args):
+            raise TimeoutError("timed out")
+
+        def prove(*args):
+            probes["n"] += 1
+            return False
+
+        try:
+            with self.assertRaises(RuntimeError) as caught:
+                bridge.await_pair_approval(
+                    "http://127.0.0.1:8767", "pair-1", "unused-token", "书房电脑",
+                    bridge.time.monotonic() + 0.05,
+                    fetch=fetch, prove=prove, sleep=lambda _seconds: None)
+            self.assertIn("确认超时", str(caught.exception))
+            self.assertNotIsInstance(caught.exception, TimeoutError)
+            self.assertEqual(probes["n"], 1)
+            self.assertEqual(bridge.config_read().get("token"), previous.get("token"))
+        finally:
+            bridge.config_save(previous)
+
+    def test_closed_port_is_the_connection_error_the_poll_retries(self):
+        import socket
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        sock.close()
+        with patch.object(bridge, "target", return_value=("127.0.0.1", port)):
+            with self.assertRaises(ConnectionRefusedError):
+                bridge.fetch_pair_state("http://127.0.0.1:8767", "pair-1", bridge.time.monotonic() + 2)
+
+    def test_pair_saves_after_dropped_status_polls(self):
+        self._pair_against(self._DropThenApprove)
+
+    def test_pair_saves_when_status_is_gone_but_heartbeat_accepts_the_token(self):
+        self._pair_against(self._GoneButApproved)
+
+    def _pair_against(self, handler):
+        previous = bridge.config_read()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            output = io.StringIO()
+            with patch.object(bridge, "discover", return_value="http://127.0.0.1:8767"), \
+                    patch.object(bridge, "target", return_value=server.server_address), \
+                    redirect_stdout(output):
+                bridge.pair("", "书房电脑", 2)
+            text = output.getvalue()
+            saved = bridge.config_read()
+            self.assertEqual(saved.get("token"), handler.seen["token"])
+            self.assertEqual(saved.get("address"), "http://127.0.0.1:8767")
+            self.assertIn(handler.seen["code"], text)
+            self.assertIn("手机已确认这台电脑", text)
+            self.assertNotIn(handler.seen["token"], text)
+        finally:
+            bridge.config_save(previous)
+            server.shutdown()
+            server.server_close()
+
+    class _PairPhone(BaseHTTPRequestHandler):
+        seen = {}
+
+        def do_GET(self):
+            if self.path == "/hello":
+                self._send(200, {"name": "猫叼", "model": "Test", "protocol": "dh-2048-v1"})
+                return
+            self.handle_get()
+
+        def handle_get(self):
+            self._send(200, {"state": "approved"})
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            incoming = json.loads(self.rfile.read(length).decode("utf-8"))
+            token, code = protocol.derive(self.private_hex, incoming["public_key"])
+            type(self).seen = {"token": token, "code": code}
+            self._send(202, {"id": "pair-1", "state": "pending", "public_key": self.public_hex})
+
+        def _send(self, status, payload, token=None, nonce=""):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            if token and nonce:
+                self.send_header("X-CatDiao-Sig", protocol.sign_response(token, nonce, status, body))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    class _DropThenApprove(_PairPhone):
+        private_hex, public_hex = protocol.generate_keypair()
+        polls = {"n": 0}
+
+        def handle_get(self):
+            if not self.path.startswith("/pair-status"):
+                self._send(404, {"error": "no"})
+                return
+            type(self).polls["n"] += 1
+            if type(self).polls["n"] < 3:
+                self.close_connection = True
+                return
+            self._send(200, {"state": "approved"})
+
+    class _GoneButApproved(_PairPhone):
+        private_hex, public_hex = protocol.generate_keypair()
+
+        def handle_get(self):
+            if self.path.startswith("/pair-status"):
+                self._send(404, {"error": "请求已失效"})
+                return
+            if self.path == "/heartbeat":
+                token = type(self).seen.get("token", "")
+                verdict = protocol.verify_request("GET", "/heartbeat", token, b"", self.headers)
+                status = 200 if verdict.ok else 401
+                self._send(status, {"connected": verdict.ok}, token if verdict.ok else None, verdict.nonce)
+                return
+            self._send(404, {"error": "no"})
+
     def test_skill_points_at_one_command_and_keeps_the_wording_rule(self):
         text = (ROOT / "cat-diao" / "SKILL.md").read_text(encoding="utf-8")
         shown = "用猫叼连上我这台手机。请从 https://github.com/ewanyuan/cat-diao 安装。"

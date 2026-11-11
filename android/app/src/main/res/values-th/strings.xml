@@ -147,9 +147,9 @@
     <string name="perm_title">แบตเตอรี่และสิทธิ์</string>
     <string name="perm_open_app_info">เปิดข้อมูลแอป</string>
     <string name="perm_setup_a11y">เปิดควบคุมหน้าจอแล้วกลับมา การบันทึกไม่ต้องใช้ขั้นตอนนี้</string>
-    <string name="perm_setup_overlay">อนุญาตให้แคทเดียวแสดงทับแอปอื่น แล้วกลับมา</string>
+    <string name="perm_setup_overlay">หน้าต่างลอยไม่จำเป็น แตะข้ามเพื่อไปต่อ แมวลอยเปิดทีหลังได้จากเพิ่มเติม</string>
     <string name="perm_setup_write">อนุญาตให้แคทเดียวเปลี่ยนการตั้งค่าระบบ แล้วกลับมา</string>
-    <string name="perm_setup_title">ตั้งค่าต่อ (%1$d/3)</string>
+    <string name="perm_setup_title">ตั้งค่าต่อ (%1$d/2)</string>
     <string name="perm_toast_a11y">เปิดควบคุมหน้าจอแล้วกลับมา</string>
     <string name="perm_toast_overlay">อนุญาตหน้าต่างลอยแล้วกลับมา</string>
     <string name="perm_toast_write">อนุญาตเปลี่ยนการตั้งค่าระบบแล้วกลับมา</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">ให้โทรศัพท์กับคอมพิวเตอร์ใช้ Wi-Fi เดียวกันก่อน แล้วส่งประโยคด้านล่างให้ AI บนคอมพิวเตอร์</string>
     <string name="conn_start">เริ่ม</string>
     <string name="conn_waiting_title">กำลังรอคอมพิวเตอร์เชื่อมต่อ…</string>
-    <string name="conn_waiting_body">ส่งประโยคที่เพิ่งคัดลอกให้ AI บนคอมพิวเตอร์ รอมา %1$d วินาที</string>
+    <string name="conn_waiting_body">อยู่หน้านี้ เปิดหน้าจอค้างไว้ อย่าสลับแอป จนกว่าเลข 6 หลักจะขึ้นแล้วแตะอนุญาต รอมา %1$d วินาที</string>
     <string name="conn_copy">คัดลอกประโยคนี้</string>
     <string name="conn_still_stuck">ยังเชื่อมต่อไม่ได้</string>
     <string name="conn_ai_line">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao (ต้องมี Python 3)</string>
     <string name="conn_ai_paste_with_address">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao (ต้องมี Python 3) ที่อยู่โทรศัพท์: %1$s</string>
     <string name="conn_pairing_title">ตรวจรหัส</string>
-    <string name="conn_pairing_body">ถ้าตรงกับคอมพิวเตอร์ ให้แตะอนุญาต ถ้าไม่ตรง ให้แตะปฏิเสธ</string>
+    <string name="conn_pairing_body">อยู่หน้านี้ เปิดหน้าจอค้างไว้ อย่าสลับแอป ถ้าตรงให้แตะอนุญาต ถ้าไม่ตรงให้แตะปฏิเสธ</string>
     <string name="conn_allow">อนุญาต</string>
     <string name="conn_deny">ปฏิเสธ</string>
     <string name="conn_paired_title">✓ เชื่อมต่อแล้ว</string>

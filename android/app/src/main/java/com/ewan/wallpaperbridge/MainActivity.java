@@ -328,7 +328,7 @@ public class MainActivity extends CatDiaoActivity {
             summaryDetail.setText(R.string.home_read_error_body);
             recentPanel.setVisibility(View.GONE);
         }
-        int ready = setupReadyCount();
+        boolean setupDone = SetupFlow.finished(screenReady(), writeReady());
         boolean online = computerOnline();
         ComputerConnection.Snapshot check = BridgeService.computerConnectionSnapshot();
         boolean checking = check.phase == ComputerConnection.Phase.CHECKING && BridgeService.isRunning();
@@ -385,8 +385,8 @@ public class MainActivity extends CatDiaoActivity {
         } else {
             connectionPanel.setVisibility(View.GONE);
         }
-        controlPanel.setVisibility(trusted.isEmpty() || ready == 3 ? View.GONE : View.VISIBLE);
-        if (!trusted.isEmpty() && ready < 3) {
+        controlPanel.setVisibility(trusted.isEmpty() || setupDone ? View.GONE : View.VISIBLE);
+        if (!trusted.isEmpty() && !setupDone) {
             controlStatus.setText(R.string.perm_intro);
         }
         showPairRequest();
@@ -561,12 +561,16 @@ public class MainActivity extends CatDiaoActivity {
         }
     }
 
-    private int setupReadyCount() {
-        int count = 0;
-        if (PhoneAccessibilityService.isEnabled(this)) count++;
-        if (Settings.canDrawOverlays(this)) count++;
-        if (Settings.System.canWrite(this)) count++;
-        return count;
+    private boolean screenReady() { return PhoneAccessibilityService.isEnabled(this); }
+
+    private boolean writeReady() { return Settings.System.canWrite(this); }
+
+    private boolean overlaySkipped() {
+        return getSharedPreferences("bridge", MODE_PRIVATE).getBoolean("overlay_setup_skipped", false);
+    }
+
+    private int setupStep() {
+        return SetupFlow.next(screenReady(), Settings.canDrawOverlays(this), overlaySkipped(), writeReady());
     }
 
     private void setSetupInProgress(boolean value) {
@@ -583,7 +587,7 @@ public class MainActivity extends CatDiaoActivity {
 
     private void maybeStartSetup() {
         if (!visible || setupInProgress || BridgeService.trustedName(this).isEmpty() ||
-                setupReadyCount() == 3) return;
+                setupStep() == SetupFlow.DONE) return;
         if (getSharedPreferences("bridge", MODE_PRIVATE).getBoolean("setup_prompted_once", false)) return;
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
                 .putBoolean("setup_prompted_once", true).apply();
@@ -599,9 +603,9 @@ public class MainActivity extends CatDiaoActivity {
             setSetupInProgress(false);
             return;
         }
-        int ready = setupReadyCount();
         refreshHome();
-        if (ready == 3) {
+        int step = setupStep();
+        if (step == SetupFlow.DONE) {
             setSetupInProgress(false);
             BridgeService.setupFinished();
             Toast.makeText(this, R.string.toast_setup_ready, Toast.LENGTH_LONG).show();
@@ -609,9 +613,7 @@ public class MainActivity extends CatDiaoActivity {
         }
         String instruction;
         Intent settings;
-        int step;
-        if (!PhoneAccessibilityService.isEnabled(this)) {
-            step = 1;
+        if (step == SetupFlow.SCREEN) {
             if (Build.VERSION.SDK_INT >= 33 && !getSharedPreferences("bridge", MODE_PRIVATE)
                     .getBoolean("restricted_settings_opened", false)) {
                 instruction = getString(R.string.perm_restricted_body);
@@ -621,45 +623,62 @@ public class MainActivity extends CatDiaoActivity {
                 instruction = getString(R.string.perm_setup_a11y);
                 settings = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             }
-        } else if (!Settings.canDrawOverlays(this)) {
-            step = 2;
+        } else if (step == SetupFlow.OVERLAY) {
             instruction = getString(R.string.perm_setup_overlay);
             settings = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:" + getPackageName()));
         } else {
-            step = 3;
             instruction = getString(R.string.perm_setup_write);
             settings = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS,
                     Uri.parse("package:" + getPackageName()));
         }
-        if (setupAttemptedStep != step) {
+        // Overlay is optional. Opening its settings on arrival left no way to continue.
+        if (step != SetupFlow.OVERLAY && setupAttemptedStep != step) {
             openSetupSettings(step, settings);
             return;
         }
-        setupDialog = new AlertDialog.Builder(this)
+        int ready = SetupFlow.readyCount(screenReady(), writeReady());
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.perm_setup_title, ready))
                 .setMessage(instruction)
-                .setNegativeButton(R.string.action_later, (dialog, which) -> setSetupInProgress(false))
-                .setPositiveButton(R.string.action_continue, (dialog, which) -> openSetupSettings(step, settings))
-                .setCancelable(false).create();
+                .setCancelable(false);
+        if (step == SetupFlow.OVERLAY) {
+            builder.setPositiveButton(R.string.onb_skip, (dialog, which) -> skipOverlay())
+                    .setNegativeButton(R.string.overlay_go_settings, (dialog, which) ->
+                            openSetupSettings(step, settings));
+        } else {
+            builder.setNegativeButton(R.string.action_later, (dialog, which) -> setSetupInProgress(false))
+                    .setPositiveButton(R.string.action_continue, (dialog, which) ->
+                            openSetupSettings(step, settings));
+        }
+        setupDialog = builder.create();
         setupDialog.show();
+    }
+
+    /** Continue setup without the floating cat. More can still turn it on later. */
+    private void skipOverlay() {
+        setupDialog = null;
+        getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .putBoolean("overlay_setup_skipped", true).apply();
+        // Let the current dialog finish dismissing before the next step opens.
+        mainHandler.post(this::advanceSetup);
     }
 
     private void openSetupSettings(int step, Intent settings) {
         setupAttemptedStep = step;
         getSharedPreferences("bridge", MODE_PRIVATE).edit()
                 .putInt("setup_attempted_step", step).apply();
-        if (step == 1 && settings.getAction().equals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)) {
+        if (step == SetupFlow.SCREEN && settings.getAction().equals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)) {
             getSharedPreferences("bridge", MODE_PRIVATE).edit()
                     .putBoolean("restricted_settings_opened", true).apply();
         }
-        if (step == 2) {
+        if (step == SetupFlow.OVERLAY) {
             getSharedPreferences("bridge", MODE_PRIVATE).edit()
                     .putBoolean("overlay_wanted", true).commit();
         }
         try {
-            Toast.makeText(this, step == 1 ? R.string.perm_toast_a11y :
-                    step == 2 ? R.string.perm_toast_overlay :
+            Toast.makeText(this, step == SetupFlow.SCREEN ? R.string.perm_toast_a11y :
+                    step == SetupFlow.OVERLAY ? R.string.perm_toast_overlay :
                             R.string.perm_toast_write, Toast.LENGTH_LONG).show();
             startActivity(settings);
         } catch (Exception error) {

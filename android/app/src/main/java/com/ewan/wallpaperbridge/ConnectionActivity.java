@@ -19,6 +19,7 @@ import android.os.Looper;
 import android.text.Layout;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -60,6 +61,8 @@ public class ConnectionActivity extends CatDiaoActivity {
     private boolean helpOpen;
     private long waitStartedAt;
     private boolean progressCleared;
+    private boolean awakeHeld;
+    private boolean pairedGraceArmed;
     private String rendered = "";
     private TextView liveSentence;
 
@@ -132,6 +135,7 @@ public class ConnectionActivity extends CatDiaoActivity {
         if (isFinishing()) return;
         handler.removeCallbacksAndMessages(null);
         FirstConnection.Screen screen = compose();
+        applyKeepAwake(screen.state);
         if (screen.state == FirstConnection.State.PAIRING && !sawCode) {
             sawCode = true;
             persist();
@@ -429,9 +433,44 @@ public class ConnectionActivity extends CatDiaoActivity {
     }
 
     private void exitGuide() {
+        releaseKeepAwake();
         progressCleared = true;
         clearProgress(this);
         finish();
+    }
+
+    /** Pin the screen while waiting or confirming. A dimmed OPPO screen drops port 8767. */
+    private void applyKeepAwake(FirstConnection.State state) {
+        if (PairingKeepAlive.holdScreen(state)) {
+            pairedGraceArmed = false;
+            holdScreen(android.os.SystemClock.elapsedRealtime() + PairingKeepAlive.HOLD_MS);
+            return;
+        }
+        if (PairingKeepAlive.pairedGrace(state)) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (!pairedGraceArmed) {
+                pairedGraceArmed = true;
+                awakeHeld = true;
+                BridgeService.requestPairingAwake(this,
+                        android.os.SystemClock.elapsedRealtime() + PairingKeepAlive.PAIRED_GRACE_MS);
+            }
+            return;
+        }
+        releaseKeepAwake();
+    }
+
+    private void holdScreen(long untilElapsed) {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        awakeHeld = true;
+        BridgeService.requestPairingAwake(this, untilElapsed);
+    }
+
+    private void releaseKeepAwake() {
+        pairedGraceArmed = false;
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (!awakeHeld) return;
+        awakeHeld = false;
+        BridgeService.clearPairingAwake(this);
     }
 
     private void trySample() {

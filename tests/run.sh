@@ -18,14 +18,17 @@ javac -encoding UTF-8 -d "$classes" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/OverlayPolicy.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/LocalePolicy.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/FirstConnection.java" \
+  "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/PairingKeepAlive.java" \
+  "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/SetupFlow.java" \
   "$repository/android/app/src/main/java/com/ewan/wallpaperbridge/QrCode.java" \
   "$repository/tests/ComputerConnectionTest.java" \
   "$repository/tests/CatDiaoEdgeTest.java" \
   "$repository/tests/BluetoothWireTest.java" \
   "$repository/tests/SecurityPolicyTest.java" \
   "$repository/tests/FirstConnectionTest.java" \
-  "$repository/tests/LocaleAndOverlayTest.java"
-for check in CatDiaoEdgeTest ComputerConnectionTest BluetoothWireTest SecurityPolicyTest FirstConnectionTest LocaleAndOverlayTest; do
+  "$repository/tests/LocaleAndOverlayTest.java" \
+  "$repository/tests/SetupAndKeepAliveTest.java"
+for check in CatDiaoEdgeTest ComputerConnectionTest BluetoothWireTest SecurityPolicyTest FirstConnectionTest LocaleAndOverlayTest SetupAndKeepAliveTest; do
   java -cp "$classes" "com.ewan.wallpaperbridge.$check"
 done
 export CATDIAO_TEST_JAVA="${JAVA_HOME:+$JAVA_HOME/bin/}java"

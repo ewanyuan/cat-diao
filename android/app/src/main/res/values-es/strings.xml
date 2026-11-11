@@ -147,9 +147,9 @@
     <string name="perm_title">Batería y permisos</string>
     <string name="perm_open_app_info">Abrir información de la app</string>
     <string name="perm_setup_a11y">Activa el control de pantalla y vuelve. Guardar no lo necesita.</string>
-    <string name="perm_setup_overlay">Permite que Cat Diao se muestre sobre otras apps y vuelve.</string>
+    <string name="perm_setup_overlay">La ventana flotante es opcional. Pulsa Omitir para seguir. El gato se enciende luego en Más.</string>
     <string name="perm_setup_write">Permite que Cat Diao cambie ajustes del sistema y vuelve.</string>
-    <string name="perm_setup_title">Seguir con el ajuste (%1$d/3)</string>
+    <string name="perm_setup_title">Seguir con el ajuste (%1$d/2)</string>
     <string name="perm_toast_a11y">Activa el control de pantalla y vuelve</string>
     <string name="perm_toast_overlay">Permite la ventana flotante y vuelve</string>
     <string name="perm_toast_write">Permite cambiar ajustes del sistema y vuelve</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">Primero pon este teléfono y el ordenador en el mismo Wi-Fi. Luego envía la frase de abajo a la IA del ordenador.</string>
     <string name="conn_start">Empezar</string>
     <string name="conn_waiting_title">Esperando al ordenador…</string>
-    <string name="conn_waiting_body">Envía la frase que acabas de copiar a la IA del ordenador. Llevas %1$d s.</string>
+    <string name="conn_waiting_body">Quédate en esta página. Deja la pantalla encendida y no cambies de app hasta el código de 6 dígitos y pulsa Permitir. Llevas %1$d s.</string>
     <string name="conn_copy">Copiar esta frase</string>
     <string name="conn_still_stuck">Sigue sin conectar</string>
     <string name="conn_ai_line">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao (hace falta Python 3).</string>
     <string name="conn_ai_paste_with_address">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao (hace falta Python 3). Dirección del teléfono: %1$s</string>
     <string name="conn_pairing_title">Comprueba el código</string>
-    <string name="conn_pairing_body">Si coincide con el ordenador, toca Permitir. Si no, toca Rechazar.</string>
+    <string name="conn_pairing_body">Quédate en esta página, pantalla encendida, sin cambiar de app. Si coincide, toca Permitir. Si no, toca Rechazar.</string>
     <string name="conn_allow">Permitir</string>
     <string name="conn_deny">Rechazar</string>
     <string name="conn_paired_title">✓ Conectado</string>

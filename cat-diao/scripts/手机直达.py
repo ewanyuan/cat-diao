@@ -44,6 +44,10 @@ DISCOVERY_WINDOW_SECONDS = 3.5
 SAVED_ADDRESS_BUDGET = 9.0
 SAVED_HELLO_TIMEOUT = 4.5
 SCAN_WINDOW_SECONDS = 30.0  # a /18 TCP sweep measured ~15 s on Ewan's WLAN
+# Phone keeps a pending confirm for 120s and leaves "approved" in place after that.
+# The extra seconds let a blip during 允许 still observe the result.
+APPROVAL_WINDOW_SECONDS = 150
+_PAIR_POLL_TIMEOUT = 8
 MAX_CLIPBOARD_BYTES = 262144
 PHONE_FILE_INBOX = nest_paths.inbox_dir()
 FILE_NAME_LOCK = threading.Lock()
@@ -878,6 +882,108 @@ def listen_for_phone_clipboard():
         server.serve_forever(poll_interval=0.5)
 
 
+class PairGone(Exception):
+    """The phone answered, but this pair id is no longer in memory."""
+
+
+def _pause(seconds, deadline, sleep):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return
+    sleep(min(seconds, remaining))
+
+
+def _save_approved_pair(address, token, computer_name):
+    config_save({"address": address, "token": token, "name": computer_name})
+    print("手机已确认这台电脑。收藏现在就能用。看画面、点画面需要在手机上另行开启屏幕控制。")
+
+
+def fetch_pair_state(address, pair_id, deadline):
+    """Read /pair-status. 404 means the id is gone, not that the user refused."""
+    path = "/pair-status?id=" + urllib.parse.quote(pair_id)
+    conn = connection(address, timeout=_PAIR_POLL_TIMEOUT, deadline=deadline)
+    reply = None
+    try:
+        conn.request("GET", path)
+        reply = conn.getresponse()
+        raw = reply.read()
+        if reply.status == 404:
+            raise PairGone()
+        result = json.loads(raw.decode("utf-8")) if raw else {}
+        if reply.status >= 400:
+            message = result.get("error") if isinstance(result, dict) else None
+            if not isinstance(message, str) or not message:
+                message = f"手机返回错误 {reply.status}"
+            raise RuntimeError(message)
+        state = result.get("state") if isinstance(result, dict) else None
+        if not isinstance(state, str) or not state:
+            raise RuntimeError("手机没有返回配对状态")
+        return state
+    finally:
+        if reply is not None:
+            reply.close()
+        conn.close()
+
+
+def token_is_approved(address, token, deadline):
+    """True only when the phone accepts this exchange's token.
+
+    The phone stores that token after the user taps 允许. A refused or expired
+    confirm, or a dead port, does not count. The token is never printed.
+    """
+    probe_deadline = min(deadline, time.monotonic() + 4)
+    if probe_deadline <= time.monotonic():
+        return False
+    try:
+        result = request(address, "GET", "/heartbeat", token=token, timeout=4, deadline=probe_deadline)
+    except (TimeoutError, OSError, RuntimeError, ValueError, json.JSONDecodeError, http.client.HTTPException):
+        return False
+    return isinstance(result, dict) and bool(result.get("connected"))
+
+
+def await_pair_approval(address, pair_id, token, computer_name, deadline, fetch=None, prove=None, sleep=None):
+    """Poll until the phone approves, the user refuses, or the window ends.
+
+    TimeoutError and dropped connections are retried. They used to escape to
+    the top-level handler and skip saving even after the phone had accepted.
+    If the in-memory pair id is gone but this token already works, save it.
+    That does not skip the confirm step: the phone only keeps the token after 允许.
+    """
+    fetch = fetch or fetch_pair_state
+    prove = prove or token_is_approved
+    sleep = sleep or time.sleep
+    transient = (TimeoutError, OSError, http.client.HTTPException, json.JSONDecodeError)
+
+    def proved(probe_deadline):
+        try:
+            return bool(prove(address, token, probe_deadline))
+        except (TimeoutError, OSError, RuntimeError, ValueError, json.JSONDecodeError, http.client.HTTPException):
+            return False
+
+    while time.monotonic() < deadline:
+        try:
+            state = fetch(address, pair_id, deadline)
+        except PairGone:
+            if proved(deadline):
+                _save_approved_pair(address, token, computer_name)
+                return
+            _pause(1, deadline, sleep)
+            continue
+        except transient:
+            _pause(1, deadline, sleep)
+            continue
+        if state == "approved":
+            _save_approved_pair(address, token, computer_name)
+            return
+        if state != "pending":
+            raise RuntimeError("手机未允许本次连接：" + state)
+        _pause(2, deadline, sleep)
+    if proved(time.monotonic() + 4):
+        _save_approved_pair(address, token, computer_name)
+        return
+    raise RuntimeError("手机确认超时。若手机上已经显示已连上，请先在手机上移除这次连接，再重新配对。")
+
+
 def pair(address, computer_name, wait_seconds=0):
     private_hex, public_hex = protocol.generate_keypair()
     window_seconds = wait_seconds if wait_seconds and wait_seconds > 0 else SCAN_WINDOW_SECONDS
@@ -913,17 +1019,8 @@ def pair(address, computer_name, wait_seconds=0):
         raise RuntimeError("手机没有返回可用的配对公钥") from error
     pair_id = result["id"]
     print(f"请核对手机上的 6 位数字是否为 {code}。一致后再点「允许」。不同就点「拒绝」。")
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        state = request(address, "GET", "/pair-status?id=" + urllib.parse.quote(pair_id))["state"]
-        if state == "approved":
-            config_save({"address": address, "token": token, "name": computer_name})
-            print("手机已确认这台电脑。收藏现在就能用。看画面、点画面需要在手机上另行开启屏幕控制。")
-            return
-        if state != "pending":
-            raise RuntimeError("手机未允许本次连接：" + state)
-        time.sleep(2)
-    raise RuntimeError("手机确认超时，请重新执行连接")
+    await_pair_approval(address, pair_id, token, computer_name,
+                        time.monotonic() + APPROVAL_WINDOW_SECONDS)
 
 
 def authenticated(args):
