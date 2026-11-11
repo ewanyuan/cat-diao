@@ -147,9 +147,9 @@
     <string name="perm_title">Baterai dan izin</string>
     <string name="perm_open_app_info">Buka info aplikasi</string>
     <string name="perm_setup_a11y">Aktifkan kontrol layar, lalu kembali. Menyimpan tidak memerlukannya.</string>
-    <string name="perm_setup_overlay">Izinkan Cat Diao tampil di atas aplikasi lain, lalu kembali.</string>
+    <string name="perm_setup_overlay">Jendela mengambang tidak wajib. Ketuk Lewati untuk lanjut. Kucing bisa dinyalakan nanti dari Lainnya.</string>
     <string name="perm_setup_write">Izinkan Cat Diao mengubah setelan sistem, lalu kembali.</string>
-    <string name="perm_setup_title">Lanjutkan penyiapan (%1$d/3)</string>
+    <string name="perm_setup_title">Lanjutkan penyiapan (%1$d/2)</string>
     <string name="perm_toast_a11y">Aktifkan kontrol layar, lalu kembali</string>
     <string name="perm_toast_overlay">Izinkan jendela mengambang, lalu kembali</string>
     <string name="perm_toast_write">Izinkan ubah setelan sistem, lalu kembali</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">Sambungkan ponsel ini dan komputer ke Wi-Fi yang sama dulu, lalu kirim kalimat di bawah ke AI di komputer.</string>
     <string name="conn_start">Mulai</string>
     <string name="conn_waiting_title">Menunggu komputer…</string>
-    <string name="conn_waiting_body">Kirim kalimat yang baru disalin ke AI di komputer. Sudah %1$d detik.</string>
+    <string name="conn_waiting_body">Tetap di halaman ini. Biarkan layar menyala dan jangan pindah aplikasi sampai 6 angka muncul, lalu ketuk Izinkan. Sudah %1$d detik.</string>
     <string name="conn_copy">Salin kalimat ini</string>
     <string name="conn_still_stuck">Masih belum tersambung</string>
     <string name="conn_ai_line">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao (perlu Python 3).</string>
     <string name="conn_ai_paste_with_address">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao (perlu Python 3). Alamat ponsel: %1$s</string>
     <string name="conn_pairing_title">Periksa kode</string>
-    <string name="conn_pairing_body">Jika sama dengan komputer, ketuk Izinkan. Jika tidak, ketuk Tolak.</string>
+    <string name="conn_pairing_body">Tetap di halaman ini, layar menyala, jangan pindah aplikasi. Jika sama, ketuk Izinkan. Jika tidak, ketuk Tolak.</string>
     <string name="conn_allow">Izinkan</string>
     <string name="conn_deny">Tolak</string>
     <string name="conn_paired_title">✓ Tersambung</string>

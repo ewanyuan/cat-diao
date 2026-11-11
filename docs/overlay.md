@@ -1,6 +1,6 @@
 # Floating cat and quick panel
 
-The floating cat is a small overlay. It is not a full-screen window, and it does not sit past the screen edge.
+The floating cat is a small overlay. It is not a full-screen window, and it does not sit past the screen edge. Pairing, saves, and screen control do not use it. The post-pair setup step can be skipped, and setup still finishes. Turn the cat on later from More.
 
 ## What each close does
 

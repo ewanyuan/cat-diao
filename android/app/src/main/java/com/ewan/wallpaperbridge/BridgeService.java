@@ -284,7 +284,9 @@ public class BridgeService extends Service {
     }
 
     private PowerManager.WakeLock cpuLock;
+    private PowerManager.WakeLock screenLock;
     private WifiManager.WifiLock wifiLock;
+    private final Runnable pairingAwakeTick = this::applyPairingAwake;
 
     // 息屏后保持 CPU 与 WiFi 不睡，8767 才能被电脑连上（OPPO 等机型息屏会断 WiFi）
     @SuppressWarnings("deprecation")
@@ -312,7 +314,82 @@ public class BridgeService extends Service {
     private void releaseLocks() {
         try { if (cpuLock != null && cpuLock.isHeld()) cpuLock.release(); } catch (RuntimeException ignored) { }
         try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (RuntimeException ignored) { }
+        releaseScreenLock();
         cpuLock = null; wifiLock = null;
+    }
+
+    /**
+     * Hold the screen and the listener while the waiting or confirm page is up.
+     * PARTIAL_WAKE_LOCK alone still lets OPPO dim the panel and drop port 8767.
+     */
+    public static void requestPairingAwake(Context context, long untilElapsed) {
+        android.content.SharedPreferences prefs = context.getSharedPreferences("bridge", MODE_PRIVATE);
+        long now = android.os.SystemClock.elapsedRealtime();
+        long current = prefs.getLong(PairingKeepAlive.PREF_AWAKE_UNTIL, 0L);
+        if (!(current > now && Math.abs(untilElapsed - current) < 20_000L)) {
+            prefs.edit().putLong(PairingKeepAlive.PREF_AWAKE_UNTIL, untilElapsed).commit();
+        }
+        BridgeService service = active;
+        if (service != null) service.applyPairingAwake();
+    }
+
+    public static void clearPairingAwake(Context context) {
+        context.getSharedPreferences("bridge", MODE_PRIVATE).edit()
+                .remove(PairingKeepAlive.PREF_AWAKE_UNTIL).commit();
+        BridgeService service = active;
+        if (service != null) service.applyPairingAwake();
+    }
+
+    private void applyPairingAwake() {
+        overlayHandler.removeCallbacks(pairingAwakeTick);
+        if (destroyed || active != this) return;
+        long until = preferences.getLong(PairingKeepAlive.PREF_AWAKE_UNTIL, 0L);
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (!PairingKeepAlive.wakeActive(until, now)) {
+            releaseScreenLock();
+            if (until != 0L) preferences.edit().remove(PairingKeepAlive.PREF_AWAKE_UNTIL).apply();
+            return;
+        }
+        boolean holding = screenLock != null && screenLock.isHeld();
+        acquireScreenLock();
+        ensureRadioAwake();
+        startServer();
+        if (!holding) {
+            try { startForeground(47, notification(currentStatus())); }
+            catch (RuntimeException ignored) { }
+        }
+        long delay = Math.min(Math.max(500L, until - now), 15_000L);
+        overlayHandler.postDelayed(pairingAwakeTick, delay);
+    }
+
+    private void ensureRadioAwake() {
+        try { if (cpuLock != null && !cpuLock.isHeld()) cpuLock.acquire(); }
+        catch (RuntimeException ignored) { }
+        try { if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire(); }
+        catch (RuntimeException ignored) { }
+        if (cpuLock == null || wifiLock == null) acquireLocks();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void acquireScreenLock() {
+        try {
+            if (screenLock != null && screenLock.isHeld()) return;
+            PowerManager power = getSystemService(PowerManager.class);
+            if (power == null) return;
+            if (screenLock == null) {
+                screenLock = power.newWakeLock(
+                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                        "catdiao:pairing");
+                screenLock.setReferenceCounted(false);
+            }
+            screenLock.acquire();
+        } catch (RuntimeException ignored) { screenLock = null; }
+    }
+
+    private void releaseScreenLock() {
+        try { if (screenLock != null && screenLock.isHeld()) screenLock.release(); }
+        catch (RuntimeException ignored) { }
+        screenLock = null;
     }
 
     @Override protected void attachBaseContext(Context base) {
@@ -343,6 +420,7 @@ public class BridgeService extends Service {
         startConnectionChecks();
         startBluetooth();
         watchNetwork();
+        applyPairingAwake();
     }
 
     private void watchNetwork() {
@@ -399,8 +477,15 @@ public class BridgeService extends Service {
     }
 
     @Override public void onDestroy() {
-        // ROM may kill us while the screen is off; try to come back even without onTaskRemoved.
-        if (!preferences.getString("computer_token", "").isEmpty()) scheduleServiceRestart();
+        // ROM may kill us while the screen is off. Come back during first pairing
+        // too: the token is not stored until the user taps 允许.
+        overlayHandler.removeCallbacks(pairingAwakeTick);
+        boolean wake = PairingKeepAlive.wakeActive(
+                preferences.getLong(PairingKeepAlive.PREF_AWAKE_UNTIL, 0L),
+                android.os.SystemClock.elapsedRealtime());
+        if (PairingKeepAlive.restartListener(
+                !preferences.getString("computer_token", "").isEmpty(),
+                wake, pairing.pending() != null)) scheduleServiceRestart();
         destroyed = true; releaseLocks();
         if (bluetooth != null) bluetooth.close();
         ConnectivityManager manager = getSystemService(ConnectivityManager.class);
@@ -1067,8 +1152,8 @@ public class BridgeService extends Service {
     }
 
     private boolean setupComplete() {
-        return PhoneAccessibilityService.isEnabled(this) &&
-                Settings.canDrawOverlays(this) && Settings.System.canWrite(this);
+        return SetupFlow.finished(
+                PhoneAccessibilityService.isEnabled(this), Settings.System.canWrite(this));
     }
 
     private JSONObject readJson(InputStream input, int length) throws Exception {

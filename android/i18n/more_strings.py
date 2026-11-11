@@ -416,26 +416,26 @@ def load(S, P, row):
         "Włącz sterowanie ekranem i wróć. Zapisywanie tego nie wymaga.",
         "Увімкніть керування екраном і поверніться. Для збереження це не потрібно."))
     S("perm_setup_overlay", row(
-        "Allow Cat Diao to show over other apps, then come back.",
-        "允许「猫叼」显示在其他应用上层，然后返回猫叼。",
-        "允許「貓叼」顯示在其他應用程式上層，然後返回貓叼。",
-        "他のアプリの上に表示することを許可して戻ってください。",
-        "다른 앱 위에 표시하도록 허용한 뒤 돌아오세요.",
-        "Permite que Cat Diao se muestre sobre otras apps y vuelve.",
-        "Autorisez Cat Diao à s'afficher au-dessus des autres apps, puis revenez.",
-        "Erlaube Cat Diao die Anzeige über anderen Apps und komm zurück.",
-        "Permita o Cat Diao sobre outros apps e volte.",
-        "Разрешите показ поверх других приложений и вернитесь.",
-        "اسمح لكات دياو بالظهور فوق التطبيقات الأخرى ثم عُد.",
-        "अन्य ऐप के ऊपर दिखने दें, फिर लौटें।",
-        "Izinkan Cat Diao tampil di atas aplikasi lain, lalu kembali.",
-        "Cho phép Cat Diao hiện trên ứng dụng khác, rồi quay lại.",
-        "อนุญาตให้แคทเดียวแสดงทับแอปอื่น แล้วกลับมา",
-        "Consenti a Cat Diao di comparire sopra le altre app e torna.",
-        "Cat Diao'nun diğer uygulamaların üstünde görünmesine izin verip geri dön.",
-        "Sta toe dat Cat Diao boven andere apps verschijnt en kom terug.",
-        "Zezwól Cat Diao na wyświetlanie nad innymi aplikacjami i wróć.",
-        "Дозвольте показ поверх інших застосунків і поверніться."))
+        "The floating window is optional. Tap Skip to continue. Turn the cat on later from More.",
+        "悬浮窗可以不开启。点「跳过」就能继续。以后可在「更多」里打开悬浮猫。",
+        "懸浮窗可以不開啟。點「跳過」就能繼續。以後可在「更多」裡打開懸浮貓。",
+        "フローティング表示は不要です。「スキップ」で続けられます。猫はあとで「その他」から出せます。",
+        "떠 있는 창은 없어도 됩니다. 건너뛰기로 계속하세요. 고양이는 나중에 더보기에서 켤 수 있습니다.",
+        "La ventana flotante es opcional. Pulsa Omitir para seguir. El gato se enciende luego en Más.",
+        "La fenêtre flottante est facultative. Touchez Passer pour continuer. Le chat se rallume plus tard dans Plus.",
+        "Das schwebende Fenster ist optional. Tippe auf Überspringen, um weiterzumachen. Die Katze geht später unter Mehr an.",
+        "A janela flutuante é opcional. Toque em Pular para continuar. O gato pode ser ligado depois em Mais.",
+        "Плавающее окно не обязательно. Нажмите «Пропустить», чтобы продолжить. Кота можно включить позже в «Ещё».",
+        "النافذة العائمة اختيارية. اضغط تخطي للمتابعة. يمكن تشغيل القطة لاحقًا من المزيد.",
+        "फ़्लोटिंग विंडो ज़रूरी नहीं। जारी रखने के लिए छोड़ें दबाएँ। बिल्ली बाद में और से चालू कर सकते हैं।",
+        "Jendela mengambang tidak wajib. Ketuk Lewati untuk lanjut. Kucing bisa dinyalakan nanti dari Lainnya.",
+        "Cửa sổ nổi không bắt buộc. Chạm Bỏ qua để tiếp tục. Mèo nổi có thể bật sau từ Thêm.",
+        "หน้าต่างลอยไม่จำเป็น แตะข้ามเพื่อไปต่อ แมวลอยเปิดทีหลังได้จากเพิ่มเติม",
+        "La finestra mobile è facoltativa. Tocca Salta per continuare. Il gatto si accende dopo da Altro.",
+        "Yüzen pencere gerekmez. Devam etmek için Atla'ya dokun. Kediyi sonra Diğer'den açabilirsin.",
+        "Het zwevende venster is optioneel. Tik op Overslaan om verder te gaan. De kat zet je later aan via Meer.",
+        "Okno pływające nie jest wymagane. Stuknij Pomiń, aby kontynuować. Kota włączysz później w Więcej.",
+        "Плаваюче вікно не обов'язкове. Торкніться «Пропустити», щоб продовжити. Кота можна ввімкнути пізніше в «Більше»."))
     S("perm_setup_write", row(
         "Allow Cat Diao to change system settings, then come back.",
         "允许「猫叼」修改系统设置，然后返回猫叼。",
@@ -458,10 +458,10 @@ def load(S, P, row):
         "Zezwól Cat Diao na zmianę ustawień systemu i wróć.",
         "Дозвольте змінювати системні налаштування й поверніться."))
     S("perm_setup_title", row(
-        "Continue setup (%1$d/3)", "继续连接小窝（%1$d/3）", "繼續連線電腦（%1$d/3）", "設定を続ける（%1$d/3）", "설정 계속（%1$d/3）",
-        "Seguir con el ajuste (%1$d/3)", "Continuer la préparation (%1$d/3)", "Einrichtung fortsetzen (%1$d/3)", "Continuar o ajuste (%1$d/3)", "Продолжить настройку (%1$d/3)",
-        "متابعة الإعداد (%1$d/3)", "सेटअप जारी रखें (%1$d/3)", "Lanjutkan penyiapan (%1$d/3)", "Tiếp tục thiết lập (%1$d/3)", "ตั้งค่าต่อ (%1$d/3)",
-        "Continua la preparazione (%1$d/3)", "Kuruluma devam (%1$d/3)", "Instellen vervolgen (%1$d/3)", "Kontynuuj konfigurację (%1$d/3)", "Продовжити налаштування (%1$d/3)"))
+        "Continue setup (%1$d/2)", "继续连接小窝（%1$d/2）", "繼續連線電腦（%1$d/2）", "設定を続ける（%1$d/2）", "설정 계속（%1$d/2）",
+        "Seguir con el ajuste (%1$d/2)", "Continuer la préparation (%1$d/2)", "Einrichtung fortsetzen (%1$d/2)", "Continuar o ajuste (%1$d/2)", "Продолжить настройку (%1$d/2)",
+        "متابعة الإعداد (%1$d/2)", "सेटअप जारी रखें (%1$d/2)", "Lanjutkan penyiapan (%1$d/2)", "Tiếp tục thiết lập (%1$d/2)", "ตั้งค่าต่อ (%1$d/2)",
+        "Continua la preparazione (%1$d/2)", "Kuruluma devam (%1$d/2)", "Instellen vervolgen (%1$d/2)", "Kontynuuj konfigurację (%1$d/2)", "Продовжити налаштування (%1$d/2)"))
     S("perm_toast_a11y", row(
         "Turn on screen control, then come back", "请开启「猫叼屏幕控制」，然后返回猫叼", "請開啟「貓叼螢幕控制」，然後返回貓叼", "画面操作をオンにして戻ってください", "화면 제어를 켠 뒤 돌아오세요",
         "Activa el control de pantalla y vuelve", "Activez le contrôle d'écran, puis revenez", "Bildschirmsteuerung einschalten und zurück", "Ative o controle de tela e volte", "Включите управление экраном и вернитесь",
@@ -885,26 +885,26 @@ def _connection(S, row):
         "بانتظار الكمبيوتر…", "कंप्यूटर का इंतज़ार…", "Menunggu komputer…", "Đang chờ máy tính kết nối…", "กำลังรอคอมพิวเตอร์เชื่อมต่อ…",
         "In attesa del computer…", "Bilgisayar bekleniyor…", "Wachten op de computer…", "Oczekiwanie na komputer…", "Очікування комп'ютера…"))
     S("conn_waiting_body", row(
-        "Send the sentence you just copied to the AI on the computer. Waited %1$d s.",
-        "把刚复制的这句话发给电脑上的 AI。已等 %1$d 秒。",
-        "把剛複製的這句話發給電腦上的 AI。已等 %1$d 秒。",
-        "コピーした文をパソコンの AI に送ってください。%1$d 秒待ちました。",
-        "방금 복사한 문장을 컴퓨터의 AI에 보내세요. %1$d초 기다렸습니다.",
-        "Envía la frase que acabas de copiar a la IA del ordenador. Llevas %1$d s.",
-        "Envoyez la phrase que vous venez de copier à l'IA de l'ordinateur. Attente : %1$d s.",
-        "Schick den gerade kopierten Satz an die KI am Computer. %1$d s gewartet.",
-        "Envie a frase que você acabou de copiar à IA do computador. Esperou %1$d s.",
-        "Отправьте только что скопированную фразу ИИ на компьютере. Ожидание %1$d с.",
-        "أرسل الجملة التي نسختها الآن إلى ذكاء الكمبيوتر. انتظرت %1$d ث.",
-        "अभी कॉपी किया वाक्य कंप्यूटर की AI को भेजें। %1$d सेकंड हुए।",
-        "Kirim kalimat yang baru disalin ke AI di komputer. Sudah %1$d detik.",
-        "Gửi câu vừa chép cho AI trên máy tính. Đã chờ %1$d giây.",
-        "ส่งประโยคที่เพิ่งคัดลอกให้ AI บนคอมพิวเตอร์ รอมา %1$d วินาที",
-        "Invia la frase appena copiata all'IA del computer. Attesa %1$d s.",
-        "Az önce kopyaladığın cümleyi bilgisayardaki yapay zekâya gönder. %1$d sn beklendi.",
-        "Stuur de zin die je net kopieerde naar de AI op de computer. %1$d s gewacht.",
-        "Wyślij właśnie skopiowane zdanie do AI na komputerze. Czekasz %1$d s.",
-        "Надішліть щойно скопійоване речення ШІ на комп'ютері. Очікування %1$d с."))
+        "Stay on this page. Keep the screen on and don't switch apps until the 6-digit code shows and you tap Allow. Waited %1$d s.",
+        "请留在这一页，保持亮屏，不要切换应用，直到出现 6 位数并点「允许」。已等 %1$d 秒。",
+        "請留在這一頁，保持亮屏，不要切換應用程式，直到出現 6 位數並點「允許」。已等 %1$d 秒。",
+        "この画面のまま、画面を点灯し、他のアプリに切り替えないで。6桁が出たら「許可」。%1$d 秒待ちました。",
+        "이 화면에 머무르세요. 화면을 켜 두고 앱을 바꾸지 마세요. 6자리가 나오면 허용을 누르세요. %1$d초 기다렸습니다.",
+        "Quédate en esta página. Deja la pantalla encendida y no cambies de app hasta el código de 6 dígitos y pulsa Permitir. Llevas %1$d s.",
+        "Restez sur cette page. Gardez l'écran allumé et ne changez pas d'app jusqu'au code à 6 chiffres, puis touchez Autoriser. Attente : %1$d s.",
+        "Bleib auf dieser Seite. Lass den Bildschirm an und wechsle die App nicht, bis die 6 Ziffern da sind und du auf Zulassen tippst. %1$d s gewartet.",
+        "Fique nesta página. Deixe a tela acesa e não troque de app até o código de 6 dígitos, e toque em Permitir. Esperou %1$d s.",
+        "Оставайтесь на этой странице. Не гасите экран и не переключайте приложения, пока не появятся 6 цифр и вы не нажмёте «Разрешить». Ожидание %1$d с.",
+        "ابقَ في هذه الصفحة. أبقِ الشاشة مضاءة ولا تبدّل التطبيق حتى يظهر الرمز من 6 أرقام وتضغط السماح. انتظرت %1$d ث.",
+        "इसी पेज पर रहें। स्क्रीन जलाए रखें, ऐप न बदलें, 6 अंक आएँ तो अनुमति दें दबाएँ। %1$d सेकंड हुए।",
+        "Tetap di halaman ini. Biarkan layar menyala dan jangan pindah aplikasi sampai 6 angka muncul, lalu ketuk Izinkan. Sudah %1$d detik.",
+        "Hãy ở lại trang này. Giữ màn hình sáng, đừng chuyển ứng dụng, đến khi hiện 6 số thì chạm Cho phép. Đã chờ %1$d giây.",
+        "อยู่หน้านี้ เปิดหน้าจอค้างไว้ อย่าสลับแอป จนกว่าเลข 6 หลักจะขึ้นแล้วแตะอนุญาต รอมา %1$d วินาที",
+        "Resta su questa pagina. Tieni lo schermo acceso e non cambiare app finché non escono le 6 cifre, poi tocca Consenti. Attesa %1$d s.",
+        "Bu sayfada kal. Ekran açık kalsın, uygulama değiştirme. 6 hane çıkınca İzin ver'e dokun. %1$d sn beklendi.",
+        "Blijf op deze pagina. Laat het scherm aan en wissel niet van app tot de 6 cijfers er zijn en je op Toestaan tikt. %1$d s gewacht.",
+        "Zostań na tej stronie. Nie gaś ekranu i nie przełączaj aplikacji, aż pojawi się 6 cyfr i stukniesz Zezwól. Czekasz %1$d s.",
+        "Залиштеся на цій сторінці. Не гасіть екран і не перемикайте застосунки, доки не з'являться 6 цифр і ви не торкнетеся «Дозволити». Очікування %1$d с."))
     S("conn_copy", row("Copy this line", "复制这句话", "複製這句話", "この文をコピー", "이 문장 복사", "Copiar esta frase", "Copier cette phrase", "Diesen Satz kopieren", "Copiar esta frase", "Скопировать фразу", "انسخ هذه الجملة", "यह वाक्य कॉपी करें", "Salin kalimat ini", "Chép câu này", "คัดลอกประโยคนี้", "Copia questa frase", "Bu cümleyi kopyala", "Kopieer deze zin", "Kopiuj to zdanie", "Скопіювати це речення"))
     S("conn_still_stuck", row("Still not connected", "还是连不上", "還是連不上", "まだつながらない", "아직도 연결 안 됨", "Sigue sin conectar", "Toujours pas connecté", "Immer noch nicht verbunden", "Ainda sem conexão", "Всё ещё нет связи", "ما زال غير متصل", "अब भी नहीं जुड़ा", "Masih belum tersambung", "Vẫn chưa kết nối", "ยังเชื่อมต่อไม่ได้", "Ancora non connesso", "Hâlâ bağlanmadı", "Nog steeds niet verbonden", "Nadal brak połączenia", "Досі немає зв'язку"))
     repo = "https://github.com/ewanyuan/cat-diao"
@@ -996,10 +996,26 @@ def _connection(S, row):
         "Підключи Кет Дяо до цього телефону. Установи з " + repo + " (потрібен Python 3). Адреса телефону: %1$s"))
     S("conn_pairing_title", row("Check the code", "核对数字", "核對數字", "数字を照合", "숫자 확인", "Comprueba el código", "Vérifiez le code", "Code prüfen", "Confira o código", "Сверьте код", "تحقق من الرمز", "कोड जाँचें", "Periksa kode", "Đối chiếu mã", "ตรวจรหัส", "Controlla il codice", "Kodu kontrol et", "Controleer de code", "Sprawdź kod", "Звірте код"))
     S("conn_pairing_body", row(
-        "If it matches the computer, tap Allow. If not, tap Deny.", "和电脑上的一样，再点允许。不同就点拒绝。", "和電腦上的一樣，再點允許。不同就點拒絕。", "パソコンと同じなら許可、違えば拒否をタップします。", "컴퓨터와 같으면 허용, 다르면 거절을 누르세요.",
-        "Si coincide con el ordenador, toca Permitir. Si no, toca Rechazar.", "S'il correspond à l'ordinateur, touchez Autoriser. Sinon, touchez Refuser.", "Stimmt er mit dem Computer überein, tippe auf Zulassen. Sonst auf Ablehnen.", "Se for igual ao do computador, toque em Permitir. Se não, toque em Recusar.", "Если совпадает с компьютером, нажмите «Разрешить». Если нет — «Отклонить».",
-        "إذا طابق الكمبيوتر فانقر السماح. وإلا فانقر الرفض.", "कंप्यूटर से मेल खाए तो अनुमति दें। नहीं तो अस्वीकार करें।", "Jika sama dengan komputer, ketuk Izinkan. Jika tidak, ketuk Tolak.", "Nếu giống máy tính, chạm Cho phép. Nếu không, chạm Từ chối.", "ถ้าตรงกับคอมพิวเตอร์ ให้แตะอนุญาต ถ้าไม่ตรง ให้แตะปฏิเสธ",
-        "Se coincide con il computer, tocca Consenti. Altrimenti tocca Rifiuta.", "Bilgisayarla aynıysa İzin ver'e dokun. Değilse Reddet'e dokun.", "Komt het overeen met de computer, tik op Toestaan. Zo niet, tik op Weigeren.", "Jeśli zgadza się z komputerem, stuknij Zezwól. Jeśli nie, stuknij Odrzuć.", "Якщо збігається з комп'ютером, торкніться «Дозволити». Якщо ні — «Відхилити»."))
+        "Stay on this page. Keep the screen on and don't switch apps. If the code matches, tap Allow. If not, tap Deny.",
+        "请留在这一页，保持亮屏，不要切换应用。一样就点「允许」，不同就点「拒绝」。",
+        "請留在這一頁，保持亮屏，不要切換應用程式。一樣就點「允許」，不同就點「拒絕」。",
+        "この画面のまま、画面を点灯し、他のアプリに切り替えないで。同じなら許可、違うなら拒否。",
+        "이 화면에 머무르고 화면을 켜 둔 채 앱을 바꾸지 마세요. 같으면 허용, 다르면 거절.",
+        "Quédate en esta página, pantalla encendida, sin cambiar de app. Si coincide, toca Permitir. Si no, toca Rechazar.",
+        "Restez sur cette page, écran allumé, sans changer d'app. S'il correspond, touchez Autoriser. Sinon, touchez Refuser.",
+        "Bleib auf dieser Seite, Bildschirm an, ohne die App zu wechseln. Stimmt er, tippe auf Zulassen. Sonst auf Ablehnen.",
+        "Fique nesta página, tela acesa, sem trocar de app. Se for igual, toque em Permitir. Se não, toque em Recusar.",
+        "Оставайтесь на этой странице, не гасите экран и не переключайте приложения. Если совпадает — «Разрешить». Если нет — «Отклонить».",
+        "ابقَ في هذه الصفحة، الشاشة مضاءة، دون تبديل التطبيق. إذا طابق فانقر السماح. وإلا فانقر الرفض.",
+        "इसी पेज पर रहें, स्क्रीन जलाए रखें, ऐप न बदलें। मेल खाए तो अनुमति दें। नहीं तो अस्वीकार करें।",
+        "Tetap di halaman ini, layar menyala, jangan pindah aplikasi. Jika sama, ketuk Izinkan. Jika tidak, ketuk Tolak.",
+        "Hãy ở lại trang này, giữ màn hình sáng, đừng chuyển ứng dụng. Nếu giống, chạm Cho phép. Nếu không, chạm Từ chối.",
+        "อยู่หน้านี้ เปิดหน้าจอค้างไว้ อย่าสลับแอป ถ้าตรงให้แตะอนุญาต ถ้าไม่ตรงให้แตะปฏิเสธ",
+        "Resta su questa pagina, schermo acceso, senza cambiare app. Se coincide, tocca Consenti. Altrimenti tocca Rifiuta.",
+        "Bu sayfada kal, ekran açık kalsın, uygulama değiştirme. Aynıysa İzin ver. Değilse Reddet.",
+        "Blijf op deze pagina, scherm aan, en wissel niet van app. Komt het overeen, tik op Toestaan. Zo niet, tik op Weigeren.",
+        "Zostań na tej stronie, nie gaś ekranu i nie przełączaj aplikacji. Jeśli się zgadza, stuknij Zezwól. Jeśli nie, stuknij Odrzuć.",
+        "Залиштеся на цій сторінці, не гасіть екран і не перемикайте застосунки. Якщо збігається — «Дозволити». Якщо ні — «Відхилити»."))
     S("conn_allow", row("Allow", "允许", "允許", "許可", "허용", "Permitir", "Autoriser", "Zulassen", "Permitir", "Разрешить", "السماح", "अनुमति दें", "Izinkan", "Cho phép", "อนุญาต", "Consenti", "İzin ver", "Toestaan", "Zezwól", "Дозволити"))
     S("conn_deny", row("Deny", "拒绝", "拒絕", "拒否", "거절", "Rechazar", "Refuser", "Ablehnen", "Recusar", "Отклонить", "رفض", "अस्वीकार", "Tolak", "Từ chối", "ปฏิเสธ", "Rifiuta", "Reddet", "Weigeren", "Odrzuć", "Відхилити"))
     S("conn_paired_title", row("✓ Connected", "✓ 已连上", "✓ 已連上", "✓ 接続しました", "✓ 연결됨", "✓ Conectado", "✓ Connecté", "✓ Verbunden", "✓ Conectado", "✓ Подключено", "✓ متصل", "✓ जुड़ गया", "✓ Tersambung", "✓ Đã kết nối", "✓ เชื่อมต่อแล้ว", "✓ Connesso", "✓ Bağlandı", "✓ Verbonden", "✓ Połączono", "✓ Підключено"))

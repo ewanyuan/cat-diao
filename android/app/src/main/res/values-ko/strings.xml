@@ -147,9 +147,9 @@
     <string name="perm_title">권한과 배터리</string>
     <string name="perm_open_app_info">앱 정보 열기</string>
     <string name="perm_setup_a11y">화면 제어를 켠 뒤 돌아오세요. 저장에는 필요 없습니다.</string>
-    <string name="perm_setup_overlay">다른 앱 위에 표시하도록 허용한 뒤 돌아오세요.</string>
+    <string name="perm_setup_overlay">떠 있는 창은 없어도 됩니다. 건너뛰기로 계속하세요. 고양이는 나중에 더보기에서 켤 수 있습니다.</string>
     <string name="perm_setup_write">시스템 설정 변경을 허용한 뒤 돌아오세요.</string>
-    <string name="perm_setup_title">설정 계속（%1$d/3）</string>
+    <string name="perm_setup_title">설정 계속（%1$d/2）</string>
     <string name="perm_toast_a11y">화면 제어를 켠 뒤 돌아오세요</string>
     <string name="perm_toast_overlay">떠 있는 창을 허용한 뒤 돌아오세요</string>
     <string name="perm_toast_write">시스템 설정 변경을 허용한 뒤 돌아오세요</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">먼저 휴대폰과 컴퓨터를 같은 Wi-Fi에 연결한 뒤, 아래 문장을 컴퓨터의 AI에 보내세요.</string>
     <string name="conn_start">시작</string>
     <string name="conn_waiting_title">컴퓨터 연결을 기다리는 중…</string>
-    <string name="conn_waiting_body">방금 복사한 문장을 컴퓨터의 AI에 보내세요. %1$d초 기다렸습니다.</string>
+    <string name="conn_waiting_body">이 화면에 머무르세요. 화면을 켜 두고 앱을 바꾸지 마세요. 6자리가 나오면 허용을 누르세요. %1$d초 기다렸습니다.</string>
     <string name="conn_copy">이 문장 복사</string>
     <string name="conn_still_stuck">아직도 연결 안 됨</string>
     <string name="conn_ai_line">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해 (Python 3 필요).</string>
     <string name="conn_ai_paste_with_address">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해 (Python 3 필요). 휴대폰 주소: %1$s</string>
     <string name="conn_pairing_title">숫자 확인</string>
-    <string name="conn_pairing_body">컴퓨터와 같으면 허용, 다르면 거절을 누르세요.</string>
+    <string name="conn_pairing_body">이 화면에 머무르고 화면을 켜 둔 채 앱을 바꾸지 마세요. 같으면 허용, 다르면 거절.</string>
     <string name="conn_allow">허용</string>
     <string name="conn_deny">거절</string>
     <string name="conn_paired_title">✓ 연결됨</string>

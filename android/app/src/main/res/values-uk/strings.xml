@@ -147,9 +147,9 @@
     <string name="perm_title">Батарея й доступ</string>
     <string name="perm_open_app_info">Відкрити відомості</string>
     <string name="perm_setup_a11y">Увімкніть керування екраном і поверніться. Для збереження це не потрібно.</string>
-    <string name="perm_setup_overlay">Дозвольте показ поверх інших застосунків і поверніться.</string>
+    <string name="perm_setup_overlay">Плаваюче вікно не обов\'язкове. Торкніться «Пропустити», щоб продовжити. Кота можна ввімкнути пізніше в «Більше».</string>
     <string name="perm_setup_write">Дозвольте змінювати системні налаштування й поверніться.</string>
-    <string name="perm_setup_title">Продовжити налаштування (%1$d/3)</string>
+    <string name="perm_setup_title">Продовжити налаштування (%1$d/2)</string>
     <string name="perm_toast_a11y">Увімкніть керування екраном і поверніться</string>
     <string name="perm_toast_overlay">Дозвольте плаваюче вікно й поверніться</string>
     <string name="perm_toast_write">Дозвольте змінювати налаштування й поверніться</string>
@@ -216,7 +216,7 @@
     <string name="conn_not_paired_body">Спочатку підключіть телефон і комп\'ютер до одного Wi-Fi, потім надішліть речення нижче ШІ на комп\'ютері.</string>
     <string name="conn_start">Почати</string>
     <string name="conn_waiting_title">Очікування комп\'ютера…</string>
-    <string name="conn_waiting_body">Надішліть щойно скопійоване речення ШІ на комп\'ютері. Очікування %1$d с.</string>
+    <string name="conn_waiting_body">Залиштеся на цій сторінці. Не гасіть екран і не перемикайте застосунки, доки не з\'являться 6 цифр і ви не торкнетеся «Дозволити». Очікування %1$d с.</string>
     <string name="conn_copy">Скопіювати це речення</string>
     <string name="conn_still_stuck">Досі немає зв\'язку</string>
     <string name="conn_ai_line">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao.</string>
@@ -224,7 +224,7 @@
     <string name="conn_ai_paste">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao (потрібен Python 3).</string>
     <string name="conn_ai_paste_with_address">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao (потрібен Python 3). Адреса телефону: %1$s</string>
     <string name="conn_pairing_title">Звірте код</string>
-    <string name="conn_pairing_body">Якщо збігається з комп\'ютером, торкніться «Дозволити». Якщо ні — «Відхилити».</string>
+    <string name="conn_pairing_body">Залиштеся на цій сторінці, не гасіть екран і не перемикайте застосунки. Якщо збігається — «Дозволити». Якщо ні — «Відхилити».</string>
     <string name="conn_allow">Дозволити</string>
     <string name="conn_deny">Відхилити</string>
     <string name="conn_paired_title">✓ Підключено</string>
