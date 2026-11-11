@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">ส่งประโยคที่เพิ่งคัดลอกให้ AI บนคอมพิวเตอร์ รอมา %1$d วินาที</string>
     <string name="conn_copy">คัดลอกประโยคนี้</string>
     <string name="conn_still_stuck">ยังเชื่อมต่อไม่ได้</string>
-    <string name="conn_ai_line">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao (ต้องมี Python 3)</string>
-    <string name="conn_ai_line_with_address">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao (ต้องมี Python 3) ที่อยู่โทรศัพท์: %1$s</string>
+    <string name="conn_ai_line">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao</string>
+    <string name="conn_ai_line_with_address">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao ที่อยู่โทรศัพท์: %1$s</string>
+    <string name="conn_ai_paste">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao (ต้องมี Python 3)</string>
+    <string name="conn_ai_paste_with_address">เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก https://github.com/ewanyuan/cat-diao (ต้องมี Python 3) ที่อยู่โทรศัพท์: %1$s</string>
     <string name="conn_pairing_title">ตรวจรหัส</string>
     <string name="conn_pairing_body">ถ้าตรงกับคอมพิวเตอร์ ให้แตะอนุญาต ถ้าไม่ตรง ให้แตะปฏิเสธ</string>
     <string name="conn_allow">อนุญาต</string>

@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Az önce kopyaladığın cümleyi bilgisayardaki yapay zekâya gönder. %1$d sn beklendi.</string>
     <string name="conn_copy">Bu cümleyi kopyala</string>
     <string name="conn_still_stuck">Hâlâ bağlanmadı</string>
-    <string name="conn_ai_line">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur (Python 3 gerekir).</string>
-    <string name="conn_ai_line_with_address">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur (Python 3 gerekir). Telefon adresi: %1$s</string>
+    <string name="conn_ai_line">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur.</string>
+    <string name="conn_ai_line_with_address">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur. Telefon adresi: %1$s</string>
+    <string name="conn_ai_paste">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur (Python 3 gerekir).</string>
+    <string name="conn_ai_paste_with_address">Cat Diao\'yu bu telefona bağla. https://github.com/ewanyuan/cat-diao adresinden kur (Python 3 gerekir). Telefon adresi: %1$s</string>
     <string name="conn_pairing_title">Kodu kontrol et</string>
     <string name="conn_pairing_body">Bilgisayarla aynıysa İzin ver\'e dokun. Değilse Reddet\'e dokun.</string>
     <string name="conn_allow">İzin ver</string>

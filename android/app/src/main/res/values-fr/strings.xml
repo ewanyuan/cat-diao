@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Envoyez la phrase que vous venez de copier à l\'IA de l\'ordinateur. Attente : %1$d s.</string>
     <string name="conn_copy">Copier cette phrase</string>
     <string name="conn_still_stuck">Toujours pas connecté</string>
-    <string name="conn_ai_line">Connecte Cat Diao à ce téléphone. Installe-le depuis https://github.com/ewanyuan/cat-diao (Python 3 requis).</string>
-    <string name="conn_ai_line_with_address">Connecte Cat Diao à ce téléphone. Installe-le depuis https://github.com/ewanyuan/cat-diao (Python 3 requis). Adresse du téléphone : %1$s</string>
+    <string name="conn_ai_line">Connecte Cat Diao à ce téléphone. Installe-le depuis https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">Connecte Cat Diao à ce téléphone. Installe-le depuis https://github.com/ewanyuan/cat-diao. Adresse du téléphone : %1$s</string>
+    <string name="conn_ai_paste">Connecte Cat Diao à ce téléphone. Installe-le depuis https://github.com/ewanyuan/cat-diao (Python 3 requis).</string>
+    <string name="conn_ai_paste_with_address">Connecte Cat Diao à ce téléphone. Installe-le depuis https://github.com/ewanyuan/cat-diao (Python 3 requis). Adresse du téléphone : %1$s</string>
     <string name="conn_pairing_title">Vérifiez le code</string>
     <string name="conn_pairing_body">S\'il correspond à l\'ordinateur, touchez Autoriser. Sinon, touchez Refuser.</string>
     <string name="conn_allow">Autoriser</string>

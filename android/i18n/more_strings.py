@@ -908,7 +908,51 @@ def _connection(S, row):
     S("conn_copy", row("Copy this line", "复制这句话", "複製這句話", "この文をコピー", "이 문장 복사", "Copiar esta frase", "Copier cette phrase", "Diesen Satz kopieren", "Copiar esta frase", "Скопировать фразу", "انسخ هذه الجملة", "यह वाक्य कॉपी करें", "Salin kalimat ini", "Chép câu này", "คัดลอกประโยคนี้", "Copia questa frase", "Bu cümleyi kopyala", "Kopieer deze zin", "Kopiuj to zdanie", "Скопіювати це речення"))
     S("conn_still_stuck", row("Still not connected", "还是连不上", "還是連不上", "まだつながらない", "아직도 연결 안 됨", "Sigue sin conectar", "Toujours pas connecté", "Immer noch nicht verbunden", "Ainda sem conexão", "Всё ещё нет связи", "ما زال غير متصل", "अब भी नहीं जुड़ा", "Masih belum tersambung", "Vẫn chưa kết nối", "ยังเชื่อมต่อไม่ได้", "Ancora non connesso", "Hâlâ bağlanmadı", "Nog steeds niet verbonden", "Nadal brak połączenia", "Досі немає зв'язку"))
     repo = "https://github.com/ewanyuan/cat-diao"
+    # The card shows these. Python 3 stays off every string a person can see.
     S("conn_ai_line", row(
+        "Connect Cat Diao to this phone. Install it from " + repo + ".",
+        "用猫叼连上我这台手机。请从 " + repo + " 安装。",
+        "用貓叼連上我這支手機。請從 " + repo + " 安裝。",
+        "このスマホにキャットディオを接続して。" + repo + " からインストールして。",
+        "이 휴대폰에 캣댜오를 연결해 줘. " + repo + " 에서 설치해.",
+        "Conecta Cat Diao a este teléfono. Instálalo desde " + repo + ".",
+        "Connecte Cat Diao à ce téléphone. Installe-le depuis " + repo + ".",
+        "Verbinde Cat Diao mit diesem Telefon. Installiere es von " + repo + ".",
+        "Conecte o Cat Diao a este telefone. Instale de " + repo + ".",
+        "Подключи Кэт Дяо к этому телефону. Установи с " + repo + ".",
+        "صِل كات دياو بهذا الهاتف. ثبّته من " + repo + ".",
+        "कैट डियाओ को इस फ़ोन से जोड़ो। " + repo + " से इंस्टॉल करो।",
+        "Hubungkan Cat Diao ke ponsel ini. Pasang dari " + repo + ".",
+        "Kết nối Cat Diao với điện thoại này. Hãy cài từ " + repo + ".",
+        "เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก " + repo,
+        "Collega Cat Diao a questo telefono. Installalo da " + repo + ".",
+        "Cat Diao'yu bu telefona bağla. " + repo + " adresinden kur.",
+        "Verbind Cat Diao met deze telefoon. Installeer het vanaf " + repo + ".",
+        "Połącz Cat Diao z tym telefonem. Zainstaluj z " + repo + ".",
+        "Підключи Кет Дяо до цього телефону. Установи з " + repo + "."))
+    S("conn_ai_line_with_address", row(
+        "Connect Cat Diao to this phone. Install it from " + repo + ". Phone address: %1$s",
+        "用猫叼连上我这台手机。请从 " + repo + " 安装。手机地址：%1$s",
+        "用貓叼連上我這支手機。請從 " + repo + " 安裝。手機位址：%1$s",
+        "このスマホにキャットディオを接続して。" + repo + " からインストールして。スマホのアドレス：%1$s",
+        "이 휴대폰에 캣댜오를 연결해 줘. " + repo + " 에서 설치해. 휴대폰 주소: %1$s",
+        "Conecta Cat Diao a este teléfono. Instálalo desde " + repo + ". Dirección del teléfono: %1$s",
+        "Connecte Cat Diao à ce téléphone. Installe-le depuis " + repo + ". Adresse du téléphone : %1$s",
+        "Verbinde Cat Diao mit diesem Telefon. Installiere es von " + repo + ". Telefonadresse: %1$s",
+        "Conecte o Cat Diao a este telefone. Instale de " + repo + ". Endereço do telefone: %1$s",
+        "Подключи Кэт Дяо к этому телефону. Установи с " + repo + ". Адрес телефона: %1$s",
+        "صِل كات دياو بهذا الهاتف. ثبّته من " + repo + ". عنوان الهاتف: %1$s",
+        "कैट डियाओ को इस फ़ोन से जोड़ो। " + repo + " से इंस्टॉल करो। फ़ोन का पता: %1$s",
+        "Hubungkan Cat Diao ke ponsel ini. Pasang dari " + repo + ". Alamat ponsel: %1$s",
+        "Kết nối Cat Diao với điện thoại này. Hãy cài từ " + repo + ". Địa chỉ điện thoại: %1$s",
+        "เชื่อมแคทเดียวกับโทรศัพท์นี้ ติดตั้งจาก " + repo + " ที่อยู่โทรศัพท์: %1$s",
+        "Collega Cat Diao a questo telefono. Installalo da " + repo + ". Indirizzo del telefono: %1$s",
+        "Cat Diao'yu bu telefona bağla. " + repo + " adresinden kur. Telefon adresi: %1$s",
+        "Verbind Cat Diao met deze telefoon. Installeer het vanaf " + repo + ". Telefoonadres: %1$s",
+        "Połącz Cat Diao z tym telefonem. Zainstaluj z " + repo + ". Adres telefonu: %1$s",
+        "Підключи Кет Дяо до цього телефону. Установи з " + repo + ". Адреса телефону: %1$s"))
+    # Clipboard only. The activity must not put these on a text view.
+    S("conn_ai_paste", row(
         "Connect Cat Diao to this phone. Install it from " + repo + " (needs Python 3).",
         "用猫叼连上我这台手机。请从 " + repo + " 安装（需要 Python 3）。",
         "用貓叼連上我這支手機。請從 " + repo + " 安裝（需要 Python 3）。",
@@ -929,7 +973,7 @@ def _connection(S, row):
         "Verbind Cat Diao met deze telefoon. Installeer het vanaf " + repo + " (Python 3 nodig).",
         "Połącz Cat Diao z tym telefonem. Zainstaluj z " + repo + " (potrzebny Python 3).",
         "Підключи Кет Дяо до цього телефону. Установи з " + repo + " (потрібен Python 3)."))
-    S("conn_ai_line_with_address", row(
+    S("conn_ai_paste_with_address", row(
         "Connect Cat Diao to this phone. Install it from " + repo + " (needs Python 3). Phone address: %1$s",
         "用猫叼连上我这台手机。请从 " + repo + " 安装（需要 Python 3）。手机地址：%1$s",
         "用貓叼連上我這支手機。請從 " + repo + " 安裝（需要 Python 3）。手機位址：%1$s",

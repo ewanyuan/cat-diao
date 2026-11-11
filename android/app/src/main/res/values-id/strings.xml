@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Kirim kalimat yang baru disalin ke AI di komputer. Sudah %1$d detik.</string>
     <string name="conn_copy">Salin kalimat ini</string>
     <string name="conn_still_stuck">Masih belum tersambung</string>
-    <string name="conn_ai_line">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao (perlu Python 3).</string>
-    <string name="conn_ai_line_with_address">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao (perlu Python 3). Alamat ponsel: %1$s</string>
+    <string name="conn_ai_line">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao. Alamat ponsel: %1$s</string>
+    <string name="conn_ai_paste">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao (perlu Python 3).</string>
+    <string name="conn_ai_paste_with_address">Hubungkan Cat Diao ke ponsel ini. Pasang dari https://github.com/ewanyuan/cat-diao (perlu Python 3). Alamat ponsel: %1$s</string>
     <string name="conn_pairing_title">Periksa kode</string>
     <string name="conn_pairing_body">Jika sama dengan komputer, ketuk Izinkan. Jika tidak, ketuk Tolak.</string>
     <string name="conn_allow">Izinkan</string>

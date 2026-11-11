@@ -161,9 +161,12 @@ class OnboardingChecks(unittest.TestCase):
 
     def test_skill_points_at_one_command_and_keeps_the_wording_rule(self):
         text = (ROOT / "cat-diao" / "SKILL.md").read_text(encoding="utf-8")
+        shown = "用猫叼连上我这台手机。请从 https://github.com/ewanyuan/cat-diao 安装。"
         pasted = "用猫叼连上我这台手机。请从 https://github.com/ewanyuan/cat-diao 安装（需要 Python 3）。"
         self.assertIn("run.ps1 pair", text)
+        self.assertIn(shown, text)
         self.assertIn(pasted, text)
+        self.assertIn("不写 Python 3", text)
         self.assertIn("先让手机和电脑连同一个 Wi-Fi", text)
         self.assertIn("电脑连上后", text)
         self.assertIn("二维码", text)
@@ -177,7 +180,9 @@ class OnboardingChecks(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         for name, body in (("skill", text), ("guide", guide), ("readme", readme)):
             self.assertIn("先让手机和电脑连同一个 Wi-Fi", body, name)
+            self.assertIn("不写 Python 3", body, name)
             self.assertNotIn("让它从 GitHub 装好猫叼（需要 Python 3）", body, name)
+        self.assertIn(shown, guide)
         self.assertIn(pasted, guide)
         self.assertIn("https://github.com/ewanyuan/cat-diao", readme)
         script = (ROOT / "cat-diao" / "scripts" / "run.ps1").read_bytes()

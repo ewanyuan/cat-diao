@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">أرسل الجملة التي نسختها الآن إلى ذكاء الكمبيوتر. انتظرت %1$d ث.</string>
     <string name="conn_copy">انسخ هذه الجملة</string>
     <string name="conn_still_stuck">ما زال غير متصل</string>
-    <string name="conn_ai_line">صِل كات دياو بهذا الهاتف. ثبّته من https://github.com/ewanyuan/cat-diao (يلزم Python 3).</string>
-    <string name="conn_ai_line_with_address">صِل كات دياو بهذا الهاتف. ثبّته من https://github.com/ewanyuan/cat-diao (يلزم Python 3). عنوان الهاتف: %1$s</string>
+    <string name="conn_ai_line">صِل كات دياو بهذا الهاتف. ثبّته من https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">صِل كات دياو بهذا الهاتف. ثبّته من https://github.com/ewanyuan/cat-diao. عنوان الهاتف: %1$s</string>
+    <string name="conn_ai_paste">صِل كات دياو بهذا الهاتف. ثبّته من https://github.com/ewanyuan/cat-diao (يلزم Python 3).</string>
+    <string name="conn_ai_paste_with_address">صِل كات دياو بهذا الهاتف. ثبّته من https://github.com/ewanyuan/cat-diao (يلزم Python 3). عنوان الهاتف: %1$s</string>
     <string name="conn_pairing_title">تحقق من الرمز</string>
     <string name="conn_pairing_body">إذا طابق الكمبيوتر فانقر السماح. وإلا فانقر الرفض.</string>
     <string name="conn_allow">السماح</string>

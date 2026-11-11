@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Envía la frase que acabas de copiar a la IA del ordenador. Llevas %1$d s.</string>
     <string name="conn_copy">Copiar esta frase</string>
     <string name="conn_still_stuck">Sigue sin conectar</string>
-    <string name="conn_ai_line">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao (hace falta Python 3).</string>
-    <string name="conn_ai_line_with_address">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao (hace falta Python 3). Dirección del teléfono: %1$s</string>
+    <string name="conn_ai_line">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao. Dirección del teléfono: %1$s</string>
+    <string name="conn_ai_paste">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao (hace falta Python 3).</string>
+    <string name="conn_ai_paste_with_address">Conecta Cat Diao a este teléfono. Instálalo desde https://github.com/ewanyuan/cat-diao (hace falta Python 3). Dirección del teléfono: %1$s</string>
     <string name="conn_pairing_title">Comprueba el código</string>
     <string name="conn_pairing_body">Si coincide con el ordenador, toca Permitir. Si no, toca Rechazar.</string>
     <string name="conn_allow">Permitir</string>

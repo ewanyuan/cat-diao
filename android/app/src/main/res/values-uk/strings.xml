@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Надішліть щойно скопійоване речення ШІ на комп\'ютері. Очікування %1$d с.</string>
     <string name="conn_copy">Скопіювати це речення</string>
     <string name="conn_still_stuck">Досі немає зв\'язку</string>
-    <string name="conn_ai_line">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao (потрібен Python 3).</string>
-    <string name="conn_ai_line_with_address">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao (потрібен Python 3). Адреса телефону: %1$s</string>
+    <string name="conn_ai_line">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao. Адреса телефону: %1$s</string>
+    <string name="conn_ai_paste">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao (потрібен Python 3).</string>
+    <string name="conn_ai_paste_with_address">Підключи Кет Дяо до цього телефону. Установи з https://github.com/ewanyuan/cat-diao (потрібен Python 3). Адреса телефону: %1$s</string>
     <string name="conn_pairing_title">Звірте код</string>
     <string name="conn_pairing_body">Якщо збігається з комп\'ютером, торкніться «Дозволити». Якщо ні — «Відхилити».</string>
     <string name="conn_allow">Дозволити</string>

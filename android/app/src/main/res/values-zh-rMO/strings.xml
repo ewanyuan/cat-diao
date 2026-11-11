@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">把剛複製的這句話發給電腦上的 AI。已等 %1$d 秒。</string>
     <string name="conn_copy">複製這句話</string>
     <string name="conn_still_stuck">還是連不上</string>
-    <string name="conn_ai_line">用貓叼連上我這支手機。請從 https://github.com/ewanyuan/cat-diao 安裝（需要 Python 3）。</string>
-    <string name="conn_ai_line_with_address">用貓叼連上我這支手機。請從 https://github.com/ewanyuan/cat-diao 安裝（需要 Python 3）。手機位址：%1$s</string>
+    <string name="conn_ai_line">用貓叼連上我這支手機。請從 https://github.com/ewanyuan/cat-diao 安裝。</string>
+    <string name="conn_ai_line_with_address">用貓叼連上我這支手機。請從 https://github.com/ewanyuan/cat-diao 安裝。手機位址：%1$s</string>
+    <string name="conn_ai_paste">用貓叼連上我這支手機。請從 https://github.com/ewanyuan/cat-diao 安裝（需要 Python 3）。</string>
+    <string name="conn_ai_paste_with_address">用貓叼連上我這支手機。請從 https://github.com/ewanyuan/cat-diao 安裝（需要 Python 3）。手機位址：%1$s</string>
     <string name="conn_pairing_title">核對數字</string>
     <string name="conn_pairing_body">和電腦上的一樣，再點允許。不同就點拒絕。</string>
     <string name="conn_allow">允許</string>

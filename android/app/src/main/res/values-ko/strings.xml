@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">방금 복사한 문장을 컴퓨터의 AI에 보내세요. %1$d초 기다렸습니다.</string>
     <string name="conn_copy">이 문장 복사</string>
     <string name="conn_still_stuck">아직도 연결 안 됨</string>
-    <string name="conn_ai_line">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해 (Python 3 필요).</string>
-    <string name="conn_ai_line_with_address">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해 (Python 3 필요). 휴대폰 주소: %1$s</string>
+    <string name="conn_ai_line">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해.</string>
+    <string name="conn_ai_line_with_address">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해. 휴대폰 주소: %1$s</string>
+    <string name="conn_ai_paste">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해 (Python 3 필요).</string>
+    <string name="conn_ai_paste_with_address">이 휴대폰에 캣댜오를 연결해 줘. https://github.com/ewanyuan/cat-diao 에서 설치해 (Python 3 필요). 휴대폰 주소: %1$s</string>
     <string name="conn_pairing_title">숫자 확인</string>
     <string name="conn_pairing_body">컴퓨터와 같으면 허용, 다르면 거절을 누르세요.</string>
     <string name="conn_allow">허용</string>

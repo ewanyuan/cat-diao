@@ -133,25 +133,41 @@ class StringResourcesTest(unittest.TestCase):
         self.assertIn("sentence below", en["conn_not_paired_body"])
         self.assertIn("only after", en["conn_code_pending"])
         self.assertIn("just copied", en["conn_waiting_body"])
-        self.assertIn("用猫叼连上我这台手机", zh["conn_ai_line"])
+        shown = "用猫叼连上我这台手机。请从 " + repo + " 安装。"
+        pasted = "用猫叼连上我这台手机。请从 " + repo + " 安装（需要 Python 3）。"
+        self.assertEqual(zh["conn_ai_line"], shown)
+        self.assertEqual(zh["conn_ai_paste"], pasted)
+        self.assertEqual(zh["conn_ai_line_with_address"], shown + "手机地址：%1$s")
+        self.assertEqual(zh["conn_ai_paste_with_address"], pasted + "手机地址：%1$s")
         self.assertIn("这句话已复制", zh["conn_sentence_copied"])
         self.assertIn("电脑连上后", zh["conn_code_pending"])
         self.assertIn("才会", zh["conn_code_pending"])
         self.assertIn("这句话", zh["conn_waiting_body"])
+        paste_keys = {"conn_ai_paste", "conn_ai_paste_with_address"}
         for folder, (strings, _) in self.packs.items():
             body = strings["conn_not_paired_body"]
             self.assertNotIn("GitHub", body, folder)
             self.assertNotIn("github.com", body, folder)
             self.assertNotIn("Python", body, folder)
+            for key, value in strings.items():
+                if key not in paste_keys:
+                    self.assertNotIn("python", value.lower(), f"{folder}:{key}")
             self.assertNotIn("run.ps1", strings["conn_ai_line"], folder)
             self.assertNotIn("%", strings["conn_ai_line"], folder)
             self.assertIn(repo, strings["conn_ai_line"], folder)
-            self.assertIn("Python 3", strings["conn_ai_line"], folder)
             addressed = strings["conn_ai_line_with_address"]
             self.assertIn(repo, addressed, folder)
-            self.assertIn("Python 3", addressed, folder)
+            self.assertNotIn("Python", addressed, folder)
             self.assertIn("%1$s", addressed, folder)
             self.assertNotIn("run.ps1", addressed, folder)
+            self.assertIn(repo, strings["conn_ai_paste"], folder)
+            self.assertIn("Python 3", strings["conn_ai_paste"], folder)
+            self.assertNotIn("%", strings["conn_ai_paste"], folder)
+            pasted_address = strings["conn_ai_paste_with_address"]
+            self.assertIn(repo, pasted_address, folder)
+            self.assertIn("Python 3", pasted_address, folder)
+            self.assertIn("%1$s", pasted_address, folder)
+            self.assertNotIn("run.ps1", pasted_address, folder)
         self.assertIn("允许受限设置", zh["perm_restricted_body"])
         self.assertIn("右上角", zh["perm_restricted_body"])
         self.assertEqual(zh["pause_remote"], "暂停遥控")

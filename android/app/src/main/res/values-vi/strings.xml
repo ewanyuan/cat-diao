@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Gửi câu vừa chép cho AI trên máy tính. Đã chờ %1$d giây.</string>
     <string name="conn_copy">Chép câu này</string>
     <string name="conn_still_stuck">Vẫn chưa kết nối</string>
-    <string name="conn_ai_line">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao (cần Python 3).</string>
-    <string name="conn_ai_line_with_address">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao (cần Python 3). Địa chỉ điện thoại: %1$s</string>
+    <string name="conn_ai_line">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao. Địa chỉ điện thoại: %1$s</string>
+    <string name="conn_ai_paste">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao (cần Python 3).</string>
+    <string name="conn_ai_paste_with_address">Kết nối Cat Diao với điện thoại này. Hãy cài từ https://github.com/ewanyuan/cat-diao (cần Python 3). Địa chỉ điện thoại: %1$s</string>
     <string name="conn_pairing_title">Đối chiếu mã</string>
     <string name="conn_pairing_body">Nếu giống máy tính, chạm Cho phép. Nếu không, chạm Từ chối.</string>
     <string name="conn_allow">Cho phép</string>

@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">अभी कॉपी किया वाक्य कंप्यूटर की AI को भेजें। %1$d सेकंड हुए।</string>
     <string name="conn_copy">यह वाक्य कॉपी करें</string>
     <string name="conn_still_stuck">अब भी नहीं जुड़ा</string>
-    <string name="conn_ai_line">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो (Python 3 चाहिए)।</string>
-    <string name="conn_ai_line_with_address">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो (Python 3 चाहिए)। फ़ोन का पता: %1$s</string>
+    <string name="conn_ai_line">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो।</string>
+    <string name="conn_ai_line_with_address">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो। फ़ोन का पता: %1$s</string>
+    <string name="conn_ai_paste">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो (Python 3 चाहिए)।</string>
+    <string name="conn_ai_paste_with_address">कैट डियाओ को इस फ़ोन से जोड़ो। https://github.com/ewanyuan/cat-diao से इंस्टॉल करो (Python 3 चाहिए)। फ़ोन का पता: %1$s</string>
     <string name="conn_pairing_title">कोड जाँचें</string>
     <string name="conn_pairing_body">कंप्यूटर से मेल खाए तो अनुमति दें। नहीं तो अस्वीकार करें।</string>
     <string name="conn_allow">अनुमति दें</string>

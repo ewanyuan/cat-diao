@@ -69,6 +69,9 @@ public final class FirstConnection {
         public final String secondaryAction;
         public final boolean bluetoothEnabled;
         public final String bluetoothReason;
+        /** Sentence on the card. People read this; it has no Python note. */
+        public final String cardText;
+        /** Clipboard line for the computer's AI. Includes the Python note the card hides. */
         public final String copyText;
         public final String address;
         public final boolean showAddress;
@@ -83,7 +86,7 @@ public final class FirstConnection {
 
         Screen(State state, String title, String sentence, String primary, String primaryAction,
                String secondary, String secondaryAction, boolean bluetoothEnabled, String bluetoothReason,
-               String copyText, String address, boolean showAddress, boolean showQr, String how,
+               String cardText, String copyText, String address, boolean showAddress, boolean showQr, String how,
                String code, String[] causes, boolean green, String detail,
                String commandLine, String commandWithAddress) {
             this.state = state;
@@ -95,6 +98,7 @@ public final class FirstConnection {
             this.secondaryAction = secondaryAction;
             this.bluetoothEnabled = bluetoothEnabled;
             this.bluetoothReason = bluetoothReason;
+            this.cardText = cardText == null ? "" : cardText;
             this.copyText = copyText;
             this.address = address;
             this.showAddress = showAddress;
@@ -164,11 +168,18 @@ public final class FirstConnection {
         }
     }
 
-    /** Paste for the computer's AI. The strings include the repo and Python 3; the phone URL is added when known. */
-    public static String aiLine(Copy copy, String address) {
+    /** Sentence on the card. The repo URL stays; the Python note does not. */
+    public static String shownLine(Copy copy, String address) {
         if (address != null && address.startsWith("http://"))
             return copy.f("conn_ai_line_with_address", address);
         return copy.t("conn_ai_line");
+    }
+
+    /** Clipboard line for the computer's AI. Same sentence, plus the Python note. */
+    public static String pasteLine(Copy copy, String address) {
+        if (address != null && address.startsWith("http://"))
+            return copy.f("conn_ai_paste_with_address", address);
+        return copy.t("conn_ai_paste");
     }
 
     public static Screen present(Facts facts, Copy copy) {
@@ -194,12 +205,13 @@ public final class FirstConnection {
                     : Cause.NO_LAN;
             return screen(State.GUIDE, copy.t("conn_not_paired_title"), copy.t(causeKey(cause)),
                     copy.t("conn_recheck"), "recheck", "", "",
-                    "", facts.address, false, false, "", "", "", false, "");
+                    "", "", facts.address, false, false, "", "", "", false, "");
         }
         return screen(State.GUIDE, copy.t("conn_not_paired_title"), copy.t("conn_not_paired_body"),
                 copy.t("conn_copy"), "copy",
                 copy.t(facts.qrOpen ? "conn_hide_qr" : "conn_show_qr"), "qr",
-                aiLine(copy, facts.address), facts.address, false, facts.qrOpen, "", "", "",
+                shownLine(copy, facts.address), pasteLine(copy, facts.address), facts.address,
+                false, facts.qrOpen, "", "", "",
                 false, copy.t("conn_wifi_ok"));
     }
 
@@ -209,14 +221,15 @@ public final class FirstConnection {
                 copy.f("conn_waiting_body", seconds),
                 "", "",
                 copy.t("conn_copy"), "copy",
-                aiLine(copy, facts.address), facts.address, false, false, "", "", "",
+                shownLine(copy, facts.address), pasteLine(copy, facts.address), facts.address,
+                false, false, "", "", "",
                 false, copy.t("conn_code_pending"));
     }
 
     private static Screen pairing(Copy copy, String code) {
         return screen(State.PAIRING, copy.t("conn_waiting_title"), copy.t("conn_pairing_body"),
                 copy.t("conn_allow"), "allow", copy.t("conn_deny"), "deny",
-                "", "", false, false, "", code, "", false, "");
+                "", "", "", false, false, "", code, "", false, "");
     }
 
     private static Screen paired(Copy copy, Facts facts) {
@@ -226,24 +239,24 @@ public final class FirstConnection {
         return screen(State.PAIRED, copy.t("conn_paired_title"),
                 copy.f("conn_paired_body", name),
                 copy.t("conn_try"), "try", copy.t("conn_done"), "done",
-                "", "", false, false, "", "", "", true, detail);
+                "", "", "", false, false, "", "", "", true, detail);
     }
 
     private static Screen problems(Copy copy, Facts facts, Cause cause) {
         boolean http = facts.address.startsWith("http://");
         return new Screen(State.PROBLEMS, copy.t("conn_problems_title"), copy.t(causeKey(cause)),
                 copy.t("conn_retry"), "retry", "", "",
-                false, "", aiLine(copy, facts.address), facts.address, http, facts.helpOpen,
+                false, "", "", "", facts.address, http, facts.helpOpen,
                 copy.t("conn_advanced"), "", new String[0], false, "",
                 commandLine(), commandLine(facts.address));
     }
 
     private static Screen screen(State state, String title, String sentence, String primary, String primaryAction,
-                                 String secondary, String secondaryAction, String copyText, String address,
-                                 boolean showAddress, boolean showQr, String how, String code, String detailKey,
-                                 boolean green, String detail) {
+                                 String secondary, String secondaryAction, String cardText, String copyText,
+                                 String address, boolean showAddress, boolean showQr, String how, String code,
+                                 String detailKey, boolean green, String detail) {
         return new Screen(state, title, sentence, primary, primaryAction, secondary, secondaryAction,
-                false, "", copyText, address, showAddress, showQr, how, code, new String[0], green, detail,
+                false, "", cardText, copyText, address, showAddress, showQr, how, code, new String[0], green, detail,
                 "", "");
     }
 }

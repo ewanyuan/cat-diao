@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">Отправьте только что скопированную фразу ИИ на компьютере. Ожидание %1$d с.</string>
     <string name="conn_copy">Скопировать фразу</string>
     <string name="conn_still_stuck">Всё ещё нет связи</string>
-    <string name="conn_ai_line">Подключи Кэт Дяо к этому телефону. Установи с https://github.com/ewanyuan/cat-diao (нужен Python 3).</string>
-    <string name="conn_ai_line_with_address">Подключи Кэт Дяо к этому телефону. Установи с https://github.com/ewanyuan/cat-diao (нужен Python 3). Адрес телефона: %1$s</string>
+    <string name="conn_ai_line">Подключи Кэт Дяо к этому телефону. Установи с https://github.com/ewanyuan/cat-diao.</string>
+    <string name="conn_ai_line_with_address">Подключи Кэт Дяо к этому телефону. Установи с https://github.com/ewanyuan/cat-diao. Адрес телефона: %1$s</string>
+    <string name="conn_ai_paste">Подключи Кэт Дяо к этому телефону. Установи с https://github.com/ewanyuan/cat-diao (нужен Python 3).</string>
+    <string name="conn_ai_paste_with_address">Подключи Кэт Дяо к этому телефону. Установи с https://github.com/ewanyuan/cat-diao (нужен Python 3). Адрес телефона: %1$s</string>
     <string name="conn_pairing_title">Сверьте код</string>
     <string name="conn_pairing_body">Если совпадает с компьютером, нажмите «Разрешить». Если нет — «Отклонить».</string>
     <string name="conn_allow">Разрешить</string>

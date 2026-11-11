@@ -189,7 +189,7 @@ public class ConnectionActivity extends CatDiaoActivity {
         if (screen.state == FirstConnection.State.WAITING) liveSentence = sentence;
 
         if ((screen.state == FirstConnection.State.GUIDE || screen.state == FirstConnection.State.WAITING)
-                && !screen.copyText.isEmpty()) {
+                && !screen.cardText.isEmpty()) {
             addCopyCard(page, screen);
         }
         if (!screen.detail.isEmpty() && screen.state != FirstConnection.State.WAITING) {
@@ -287,14 +287,14 @@ public class ConnectionActivity extends CatDiaoActivity {
         return bar;
     }
 
-    /** The card is the whole sentence Copy places on the clipboard. */
+    /** The card is what a person reads. Copy places {@code copyText}, which adds the Python note. */
     private void addCopyCard(LinearLayout page, FirstConnection.Screen screen) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPaddingRelative(dp(14), dp(14), dp(14), dp(14));
         card.setBackground(round(PAPER, BORDER, 14));
-        TextView phrase = label(wrapForReading(screen.copyText), 16, INK, true);
-        phrase.setContentDescription(screen.copyText);
+        TextView phrase = label(wrapForReading(screen.cardText), 16, INK, true);
+        phrase.setContentDescription(screen.cardText);
         card.addView(phrase);
         LinearLayout.LayoutParams cardLayout = new LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT);
         cardLayout.topMargin = dp(16);
@@ -372,7 +372,7 @@ public class ConnectionActivity extends CatDiaoActivity {
     private void act(String action, PairingGate.Request request, FirstConnection.Screen screen) {
         if ("copy".equals(action)) {
             String line = screen.copyText.isEmpty()
-                    ? FirstConnection.aiLine(phrases(), localAddress()) : screen.copyText;
+                    ? FirstConnection.pasteLine(phrases(), localAddress()) : screen.copyText;
             copy(line, getString(R.string.conn_sentence_copied));
             beginAttempt(true);
         } else if ("qr".equals(action)) {

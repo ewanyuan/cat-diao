@@ -219,8 +219,10 @@
     <string name="conn_waiting_body">コピーした文をパソコンの AI に送ってください。%1$d 秒待ちました。</string>
     <string name="conn_copy">この文をコピー</string>
     <string name="conn_still_stuck">まだつながらない</string>
-    <string name="conn_ai_line">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして（Python 3 が必要）。</string>
-    <string name="conn_ai_line_with_address">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして（Python 3 が必要）。スマホのアドレス：%1$s</string>
+    <string name="conn_ai_line">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして。</string>
+    <string name="conn_ai_line_with_address">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして。スマホのアドレス：%1$s</string>
+    <string name="conn_ai_paste">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして（Python 3 が必要）。</string>
+    <string name="conn_ai_paste_with_address">このスマホにキャットディオを接続して。https://github.com/ewanyuan/cat-diao からインストールして（Python 3 が必要）。スマホのアドレス：%1$s</string>
     <string name="conn_pairing_title">数字を照合</string>
     <string name="conn_pairing_body">パソコンと同じなら許可、違えば拒否をタップします。</string>
     <string name="conn_allow">許可</string>
