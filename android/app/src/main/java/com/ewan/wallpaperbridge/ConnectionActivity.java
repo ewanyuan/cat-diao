@@ -142,7 +142,8 @@ public class ConnectionActivity extends CatDiaoActivity {
         }
         String structure = screen.state.name() + '|' + screen.code + '|' + screen.primaryAction
                 + '|' + screen.secondaryAction + '|' + helpOpen + '|' + qrOpen + '|' + screen.detail
-                + '|' + screen.commandLine + '|' + screen.title + '|' + screen.showQr;
+                + '|' + screen.commandLine + '|' + screen.title + '|' + screen.showQr
+                + '|' + screen.address;
         if (structure.equals(rendered)) {
             if (liveSentence != null && screen.state == FirstConnection.State.WAITING)
                 liveSentence.setText(screen.sentence);
@@ -187,6 +188,10 @@ public class ConnectionActivity extends CatDiaoActivity {
         page.addView(sentence, new LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT));
         if (screen.state == FirstConnection.State.WAITING) liveSentence = sentence;
 
+        if ((screen.state == FirstConnection.State.GUIDE || screen.state == FirstConnection.State.WAITING)
+                && !screen.cardText.isEmpty()) {
+            addCopyCard(page, screen);
+        }
         if (!screen.detail.isEmpty() && screen.state != FirstConnection.State.WAITING) {
             TextView detail = label(screen.detail, 14, screen.green ? MINT : MUTED, false);
             detail.setPaddingRelative(0, dp(8), 0, 0);
@@ -206,10 +211,6 @@ public class ConnectionActivity extends CatDiaoActivity {
             pending.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
             pending.setPaddingRelative(0, dp(22), 0, dp(8));
             page.addView(pending, new LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT));
-        }
-
-        if (screen.state == FirstConnection.State.GUIDE && !screen.copyText.isEmpty()) {
-            addCopyCard(page, screen);
         }
 
         if (screen.showQr && screen.state == FirstConnection.State.GUIDE && screen.address.startsWith("http://")) {
@@ -286,19 +287,29 @@ public class ConnectionActivity extends CatDiaoActivity {
         return bar;
     }
 
+    /** The card is what a person reads. Copy places {@code copyText}, which adds the Python note. */
     private void addCopyCard(LinearLayout page, FirstConnection.Screen screen) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPaddingRelative(dp(14), dp(14), dp(14), dp(14));
         card.setBackground(round(PAPER, BORDER, 14));
-        TextView phrase = label(getString(R.string.conn_ai_line), 16, INK, true);
+        TextView phrase = label(wrapForReading(screen.cardText), 16, INK, true);
+        phrase.setContentDescription(screen.cardText);
         card.addView(phrase);
-        if (screen.address.startsWith("http://")) {
-            card.addView(lockedLine(screen.address, 14, MUTED));
-        }
         LinearLayout.LayoutParams cardLayout = new LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT);
         cardLayout.topMargin = dp(16);
         page.addView(card, cardLayout);
+    }
+
+    /** Lets a long URL wrap. The clipboard still receives the original sentence. */
+    private static String wrapForReading(String value) {
+        StringBuilder out = new StringBuilder(value.length() + 8);
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            out.append(c);
+            if (c == '/' || c == '.' || c == '-' || c == ':' || c == '?') out.append('\u200b');
+        }
+        return out.toString();
     }
 
     private void addHelp(LinearLayout page, FirstConnection.Screen screen) {
@@ -360,8 +371,10 @@ public class ConnectionActivity extends CatDiaoActivity {
 
     private void act(String action, PairingGate.Request request, FirstConnection.Screen screen) {
         if ("copy".equals(action)) {
+            String line = screen.copyText.isEmpty()
+                    ? FirstConnection.pasteLine(phrases(), localAddress()) : screen.copyText;
+            copy(line, getString(R.string.conn_sentence_copied));
             beginAttempt(true);
-            copy(screen.copyText.isEmpty() ? FirstConnection.aiLine(phrases(), localAddress()) : screen.copyText);
         } else if ("qr".equals(action)) {
             qrOpen = !qrOpen;
             if (qrOpen) beginAttempt(false);
@@ -469,9 +482,13 @@ public class ConnectionActivity extends CatDiaoActivity {
     }
 
     private void copy(String value) {
+        copy(value, getString(R.string.conn_copied));
+    }
+
+    private void copy(String value, String notice) {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard != null) clipboard.setPrimaryClip(ClipData.newPlainText("catdiao", value));
-        Toast.makeText(this, R.string.conn_copied, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, notice, Toast.LENGTH_SHORT).show();
     }
 
     private Bitmap bitmap(boolean[][] matrix) {

@@ -161,14 +161,30 @@ class OnboardingChecks(unittest.TestCase):
 
     def test_skill_points_at_one_command_and_keeps_the_wording_rule(self):
         text = (ROOT / "cat-diao" / "SKILL.md").read_text(encoding="utf-8")
+        shown = "用猫叼连上我这台手机。请从 https://github.com/ewanyuan/cat-diao 安装。"
+        pasted = "用猫叼连上我这台手机。请从 https://github.com/ewanyuan/cat-diao 安装（需要 Python 3）。"
         self.assertIn("run.ps1 pair", text)
-        self.assertIn("用猫叼连上我这台手机", text)
+        self.assertIn(shown, text)
+        self.assertIn(pasted, text)
+        self.assertIn("不写 Python 3", text)
+        self.assertIn("先让手机和电脑连同一个 Wi-Fi", text)
+        self.assertIn("电脑连上后", text)
         self.assertIn("二维码", text)
+        self.assertNotIn("让它从 GitHub 装好猫叼（需要 Python 3）", text)
         self.assertNotIn(r"请运行 cat-diao 的 scripts\run.ps1 pair；找不到时运行 run.ps1 pair --address http://IP:8767（IP 换成手机显示的地址）。", text)
         self.assertIn("看画面、点画面的真机验证", text)
         self.assertIn("不替代 ADB", text)
         self.assertNotIn("phone pair --wait 60", text)
         self.assertLess(text.index("用猫叼连上我这台手机"), text.index("run.ps1 pair --address"))
+        guide = (ROOT / "docs" / "first-connection.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        for name, body in (("skill", text), ("guide", guide), ("readme", readme)):
+            self.assertIn("先让手机和电脑连同一个 Wi-Fi", body, name)
+            self.assertIn("不写 Python 3", body, name)
+            self.assertNotIn("让它从 GitHub 装好猫叼（需要 Python 3）", body, name)
+        self.assertIn(shown, guide)
+        self.assertIn(pasted, guide)
+        self.assertIn("https://github.com/ewanyuan/cat-diao", readme)
         script = (ROOT / "cat-diao" / "scripts" / "run.ps1").read_bytes()
         self.assertTrue(script.startswith(b"\xef\xbb\xbf"))
         commands = script.decode("utf-8-sig")

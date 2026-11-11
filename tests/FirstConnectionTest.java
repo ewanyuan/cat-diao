@@ -27,7 +27,12 @@ public final class FirstConnectionTest {
         require("copy".equals(fresh.primaryAction), "primary copies the line");
         require("qr".equals(fresh.secondaryAction), "qr is the only secondary");
         require(fresh.bluetoothReason.isEmpty() && !fresh.bluetoothEnabled, "no bluetooth nag");
+        require(fresh.cardText.startsWith("conn_ai_line_with_address|"), "card omits the python note");
+        require(fresh.copyText.startsWith("conn_ai_paste_with_address|"), "clipboard keeps the python note");
+        require(!fresh.cardText.equals(fresh.copyText), "screen and clipboard differ");
+        require(fresh.cardText.contains("http://10.69.1.253:8767"), "card embeds the address");
         require(fresh.copyText.contains("http://10.69.1.253:8767"), "copy embeds the address");
+        require(!fresh.cardText.contains(FirstConnection.PC_COMMAND), "command stays off the card");
         require(!fresh.copyText.contains(FirstConnection.PC_COMMAND), "command stays off the guide");
         require(fresh.commandLine.isEmpty() && fresh.how.isEmpty(), "help stays closed until failure");
         require(!fresh.showQr, "qr waits for the secondary tap");
@@ -38,7 +43,13 @@ public final class FirstConnectionTest {
         require(cellular.state == FirstConnection.State.GUIDE, "warn before starting");
         require(cellular.sentence.equals("conn_cause_cellular"), "one cellular cause");
         require("recheck".equals(cellular.primaryAction) && cellular.secondary.isEmpty(), "one recheck button");
-        require(cellular.how.isEmpty() && cellular.copyText.isEmpty(), "no command before a try");
+        require(cellular.how.isEmpty() && cellular.cardText.isEmpty() && cellular.copyText.isEmpty(), "no command before a try");
+
+        FirstConnection.Screen noAddress = FirstConnection.present(facts(false, false, false, false, false, false,
+                "", "", "", "", FirstConnection.Link.WIFI, true, 0), COPY);
+        require(noAddress.cardText.equals("conn_ai_line"), "card without a phone address");
+        require(noAddress.copyText.equals("conn_ai_paste"), "clipboard without a phone address");
+        require("copy".equals(noAddress.primaryAction), "still one copy button");
 
         FirstConnection.Screen qr = FirstConnection.present(facts(false, false, true, true, false, false,
                 "", "", "", "http://10.69.1.253:8767", FirstConnection.Link.WIFI, true, 1000), COPY);
@@ -49,9 +60,12 @@ public final class FirstConnectionTest {
                 "", "", "", "http://10.69.1.253:8767", FirstConnection.Link.WIFI, true, 12_000), COPY);
         require(waiting.state == FirstConnection.State.WAITING, "waiting");
         require(waiting.title.equals("conn_waiting_title"), "waiting title");
-        require(waiting.sentence.equals("conn_waiting_body|12"), "elapsed seconds");
-        require(waiting.detail.equals("conn_code_pending"), "where the code will appear");
-        require(waiting.primary.isEmpty() && waiting.secondary.isEmpty(), "no extra choices while waiting");
+        require(waiting.sentence.equals("conn_waiting_body|12"), "send the copied sentence, and show elapsed seconds");
+        require(waiting.detail.equals("conn_code_pending"), "digits only after the computer connects");
+        require(waiting.primary.isEmpty() && "copy".equals(waiting.secondaryAction), "copy again while waiting");
+        require(waiting.secondary.equals("conn_copy"), "same copy label");
+        require(waiting.cardText.startsWith("conn_ai_line_with_address|"), "wait shows the same card");
+        require(waiting.copyText.startsWith("conn_ai_paste_with_address|"), "wait copies the same sentence");
         require(waiting.code.isEmpty() && waiting.how.isEmpty(), "no command and no fake code");
         require(!waiting.copyText.contains(FirstConnection.PC_COMMAND), "command not in the wait");
 
